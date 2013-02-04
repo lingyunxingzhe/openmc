@@ -99,9 +99,15 @@ contains
       path_cross_sections = trim(cross_sections_)
     end if
 
+    ! check for loafs run
+    call lower_case(run_loafs_)
+    if (run_loafs_ == 'true' .or. run_loafs_ == '1') then
+      loafs_run = .true.
+    end if
+
     ! Make sure that either criticality or fixed source was specified
     if (eigenvalue_ % batches == 0 .and. fixed_source_ % batches == 0 &
-         .and. criticality_ % batches == 0) then
+         .and. criticality_ % batches == 0 .and. .not. loafs_run) then
       message = "Number of batches on <eigenvalue> or <fixed_source> &
            &tag was zero."
       call fatal_error()
@@ -165,15 +171,17 @@ contains
     end if
 
     ! Check number of active batches, inactive batches, and particles
-    if (n_active <= 0) then
-      message = "Number of active batches must be greater than zero."
-      call fatal_error()
-    elseif (n_inactive < 0) then
-      message = "Number of inactive batches must be non-negative."
-      call fatal_error()
-    elseif (n_particles <= 0) then
-      message = "Number of particles must be greater than zero."
-      call fatal_error()
+    if (run_mode == MODE_FIXEDSOURCE .or. run_mode == MODE_EIGENVALUE) then
+      if (n_active <= 0) then
+        message = "Number of active batches must be greater than zero."
+        call fatal_error()
+      elseif (n_inactive < 0) then
+        message = "Number of inactive batches must be non-negative."
+        call fatal_error()
+      elseif (n_particles <= 0) then
+        message = "Number of particles must be greater than zero."
+        call fatal_error()
+      end if
     end if
 
     ! Copy random number seed if specified
@@ -557,12 +565,6 @@ contains
 #endif
     end if 
     
-    ! check for loafs run
-    call lower_case(run_loafs_)
-    if (run_loafs_ == 'true' .or. run_loafs_ == '1') then
-      loafs_run = .true.
-    end if
-
   end subroutine read_settings_xml
 
 !===============================================================================

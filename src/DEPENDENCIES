@@ -229,6 +229,9 @@ interpolation.o: global.o
 interpolation.o: search.o
 interpolation.o: string.o
 
+loafs_main.o: global.o
+loafs_main.o: output.o
+
 list_header.o: constants.o
 
 main.o: constants.o
