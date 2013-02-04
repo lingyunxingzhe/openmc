@@ -350,7 +350,8 @@ module constants
        MODE_FIXEDSOURCE = 1, & ! Fixed source mode
        MODE_EIGENVALUE  = 2, & ! K eigenvalue mode
        MODE_PLOTTING    = 3, & ! Plotting mode
-       MODE_TALLIES     = 4    ! Tally results mode
+       MODE_TALLIES     = 4, & ! Tally results mode
+       MODE_LOAFS       = 5    ! LOAF mode
 
   ! Unit numbers
   integer, parameter :: UNIT_SUMMARY = 11 ! unit # for writing summary file

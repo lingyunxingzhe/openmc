@@ -362,6 +362,12 @@ module global
   logical :: output_xs      = .false.
   logical :: output_tallies = .true.
 
+  ! ============================================================================
+  ! LOAFS VARIABLES 
+
+  ! Is LOAFS active
+  logical :: loafs_run = .false.
+
 contains
 
 !===============================================================================

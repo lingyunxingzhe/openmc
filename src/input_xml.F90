@@ -555,6 +555,12 @@ contains
         call fatal_error()
       end if
 #endif
+    end if 
+    
+    ! check for loafs run
+    call lower_case(run_loafs_)
+    if (run_loafs_ == 'true' .or. run_loafs_ == '1') then
+      loafs_run = .true.
     end if
 
   end subroutine read_settings_xml

@@ -236,6 +236,7 @@ main.o: eigenvalue.o
 main.o: finalize.o
 main.o: fixed_source.o
 main.o: global.o
+main.o: loafs_main.o
 main.o: initialize.o
 main.o: plot.o
 

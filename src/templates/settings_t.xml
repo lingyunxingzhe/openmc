@@ -52,6 +52,7 @@
   <variable name="output_" tag="output" type="word-array" length="20" />
   <variable name="ptables_" tag="ptables" type="word" length="5" />
   <variable name="run_cmfd_" tag="run_cmfd" type="word" length="5" />
+  <variable name="run_loafs_" tag="run_loafs" type="word" length="5" />
   <variable name="seed_" tag="seed" type="integer" />
   <variable name="source_" tag="source" type="source_xml" />
   <variable name="state_point_" tag="state_point" type="statepoint_xml" dimension="1" />
@@ -59,6 +60,7 @@
   <variable name="trace_" tag="trace" type="integer-array" />
   <variable name="uniform_fs_" tag="uniform_fs" type="mesh_xml" dimension="1" />
   <variable name="verbosity_" tag="verbosity" type="integer" />
+
 
   <!-- Check for old criticality tag -->
   <variable name="criticality_" tag="criticality" type="run_parameters_xml" />
