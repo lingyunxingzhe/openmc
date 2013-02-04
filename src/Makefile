@@ -16,7 +16,7 @@ include OBJECTS
 # User Options
 #===============================================================================
 
-COMPILER = gnu
+COMPILER = intel
 DEBUG    = no
 PROFILE  = no
 OPTIMIZE = no
