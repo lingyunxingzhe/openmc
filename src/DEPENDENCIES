@@ -163,6 +163,7 @@ global.o: cmfd_header.o
 global.o: constants.o
 global.o: dict_header.o
 global.o: geometry_header.o
+global.o: loafs_header.o
 global.o: material_header.o
 global.o: mesh_header.o
 global.o: particle_header.o
@@ -195,6 +196,7 @@ initialize.o: geometry_header.o
 initialize.o: global.o
 initialize.o: hdf5_interface.o
 initialize.o: input_xml.o
+initialize.o: loafs_init.o
 initialize.o: output.o
 initialize.o: random_lcg.o
 initialize.o: source.o
@@ -232,6 +234,12 @@ interpolation.o: string.o
 
 loafs_main.o: global.o
 loafs_main.o: output.o
+loafs_main.o: physics.o
+loafs_main.o: source.o
+
+loafs_init.o: global.o
+loafs_init.o: error.o
+loafs_init.o: string.o
 
 loafs_input.o: templates/loafs_t.o
 loafs_input.o: error.o

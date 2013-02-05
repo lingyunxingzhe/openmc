@@ -105,6 +105,7 @@ contains
     call lower_case(run_loafs_)
     if (run_loafs_ == 'true' .or. run_loafs_ == '1') then
       loafs_run = .true.
+      run_mode = MODE_LOAFS
     end if
 
     ! Make sure that either criticality or fixed source was specified

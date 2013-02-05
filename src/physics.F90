@@ -71,7 +71,22 @@ contains
     ! Force calculation of cross-sections by setting last energy to zero 
     micro_xs % last_E = ZERO
 
+    loafs_last_ebin = binary_search(loafs % egrid, loafs % n_egroups+1, p % E)
+
     do while (p % alive)
+
+      if (loafs_run) then
+      
+        loafs_ebin = binary_search(loafs % egrid, loafs % n_egroups+1, p % E)
+
+        if (loafs_ebin /= loafs_last_ebin) then
+          loafs % scatter_bank_idx(loafs_ebin) = &
+                                      loafs % scatter_bank_idx(loafs_ebin) + 1
+        end if
+
+        loafs_last_ebin = loafs_ebin
+        
+      end if
 
       ! Calculate microscopic and macroscopic cross sections -- note: if the
       ! material is the same as the last material and the energy of the

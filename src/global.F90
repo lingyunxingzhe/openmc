@@ -7,6 +7,7 @@ module global
   use constants
   use dict_header,      only: DictCharInt, DictIntInt
   use geometry_header,  only: Cell, Universe, Lattice, Surface
+  use loafs_header
   use material_header,  only: Material
   use mesh_header,      only: StructuredMesh
   use particle_header,  only: Particle
@@ -367,6 +368,13 @@ module global
 
   ! Is LOAFS active
   logical :: loafs_run = .false.
+  
+  ! Main object
+  type(loafs_type) :: loafs
+  
+  integer :: loafs_ebin ! index in the loafs energy grid of the current particle
+  integer :: loafs_last_ebin ! previous loafs ebin index
+  integer :: loafs_active_ebin ! index of currently running loafs energy range
 
 contains
 

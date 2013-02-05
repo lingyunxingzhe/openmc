@@ -18,6 +18,7 @@ contains
     use string,  only: lower_case
     use xml_data_loafs_t
 
+    integer :: ng
     logical :: file_exists ! does loafs.xml exist?
     character(MAX_LINE_LEN) :: filename
 
@@ -40,7 +41,21 @@ contains
     ! parse loafs.xml file
     call read_xml_file_loafs_t(filename)
 
-
+    ! Check number of particle sites
+    if (sites_ == 0) then
+      message = "Need to specify number of total starting particles."
+      call fatal_error()
+    end if
+      
+    n_particles = sites_
+    
+    
+    if (associated(mesh_ % energy)) then
+      ng = size(mesh_ % energy)
+      if(.not.allocated(loafs%egrid)) allocate(loafs%egrid(ng))
+      loafs%egrid = mesh_ % energy 
+      loafs%n_egroups = ng - 1
+    end if
 
   end subroutine configure_loafs
 
