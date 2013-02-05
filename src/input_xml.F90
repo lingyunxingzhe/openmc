@@ -6,6 +6,7 @@ module input_xml
   use error,            only: fatal_error, warning
   use geometry_header,  only: Cell, Surface, Lattice
   use global
+  use loafs_input,      only: configure_loafs
   use mesh_header,      only: StructuredMesh
   use output,           only: write_message
   use plot_header
@@ -35,6 +36,7 @@ contains
     call read_materials_xml()
     call read_tallies_xml()
     if (cmfd_run) call configure_cmfd()
+    if (loafs_run) call configure_loafs()
 
   end subroutine read_input_xml
 

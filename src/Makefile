@@ -17,7 +17,7 @@ include OBJECTS
 #===============================================================================
 
 COMPILER = intel
-DEBUG    = no
+DEBUG    = yes
 PROFILE  = no
 OPTIMIZE = no
 MPI      = no

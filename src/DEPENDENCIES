@@ -209,6 +209,7 @@ input_xml.o: dict_header.o
 input_xml.o: error.o
 input_xml.o: geometry_header.o
 input_xml.o: global.o
+input_xml.o: loafs_input.o
 input_xml.o: mesh_header.o
 input_xml.o: output.o
 input_xml.o: plot_header.o
@@ -231,6 +232,12 @@ interpolation.o: string.o
 
 loafs_main.o: global.o
 loafs_main.o: output.o
+
+loafs_input.o: templates/loafs_t.o
+loafs_input.o: error.o
+loafs_input.o: global.o
+loafs_input.o: output.o
+loafs_input.o: string.o
 
 list_header.o: constants.o
 
