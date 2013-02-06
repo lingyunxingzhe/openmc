@@ -1,9 +1,15 @@
 module loafs_main
 
+  use bank_header
   use global
   use output,       only: header
   use physics,      only: transport
-  use source,       only: get_source_particle
+  use random_lcg,   only: set_particle_seed
+  use sort,         only: heap_sort
+  use source,       only: initialize_particle, sample_external_source, &
+                          copy_source_attributes
+
+  type(Bank), pointer :: source_site => null()
 
 contains
 
@@ -13,24 +19,25 @@ contains
 
   subroutine run_loafs()
   
-!    integer :: n_cycles
-!    integer :: i
+    integer :: n_cycles
+    integer :: c
   
     if (master) call header("LOAFS SIMULATION", level=1)
   
     call mc_create_sites()
+    call sort_sites()
     
-    ! communicate sites to nodes
+    n_cycles = 1
     
-!    do i=1,n_cycles
-!    
+    do c = 1, n_cycles
+    
 !      call loo_process_inputs()
 !      call loo_solve()
-!      
+      
 !      call mc_flush_tallies()
-!      call mc_fixed_source()
-!      
-!    end do
+      call mc_fixed_source()
+      
+    end do
     
     stop
   
@@ -43,30 +50,100 @@ contains
 
   subroutine mc_create_sites()
   
-    integer(8) :: i
+    integer :: i = 0
   
-    write(*,*)loafs%egrid
-    
-    write(*,*)n_particles
-    
     ! Allocate particle
     allocate(p)
+    allocate(source_site)
   
+    ! set work arbitratily high so the site generation loop can run longer
+    work = huge(0)
+    
+    loafs % total_weight = 0.0
+    
     ! ====================================================================
-    ! LOOP OVER PARTICLES
-    PARTICLE_LOOP: do i = 1, work
+    ! LOOP UNTIL ALL SITES GENERATED
+    SITE_LOOP: do while (.not. all(loafs % site_bank_idx >= loafs % max_sites))
 
-      ! grab source particle from bank
-      call get_source_particle(i)
+      p % id = i
+
+      ! set random number seed
+      call set_particle_seed(p % id)
+
+      ! get new source particle
+      call sample_source_particle()
 
       ! transport particle
       call transport()
 
-      write(*,*)loafs % scatter_bank_idx,n_bank
+      write(*,*)loafs % site_bank_idx
 
-    end do PARTICLE_LOOP
-  
-  
+      i = i + 1
+
+    end do SITE_LOOP
+    
   end subroutine mc_create_sites
+
+!===============================================================================
+! SORT_SITES
+!===============================================================================
+
+  subroutine sort_sites()
+  
+    integer :: bin
+    
+    ! ====================================================================
+    ! LOOP OVER LOAFS BINS - TODO: parallelize this loop!
+    LOAFS_BIN_LOOP: do bin = 1, loafs % n_egroups
+
+      call heap_sort(loafs % site_banks(bin) % sites)
+
+    end do LOAFS_BIN_LOOP
+
+    
+  end subroutine sort_sites
+
+
+!===============================================================================
+! MC_FIXED_SOURCE
+!===============================================================================
+
+  subroutine mc_fixed_source()
+  
+    integer :: i, bin
+    
+    ! ====================================================================
+    ! LOOP OVER LOAFS BINS - TODO: parallelize this loop!
+    LOAFS_BIN_LOOP: do bin = 1, loafs % n_egroups
+
+      ! ====================================================================
+      ! LOOP OVER STARTING SITES IN THIS BIN
+      PARTICLE_LOOP: do i = 1, loafs % max_sites(bin)
+
+        write(*,*) loafs % site_banks(bin) % sites(i) % E
+
+      end do PARTICLE_LOOP
+
+    end do LOAFS_BIN_LOOP
+  
+    
+  end subroutine mc_fixed_source
+
+!===============================================================================
+! SAMPLE_SOURCE_PARTICLE
+!===============================================================================
+
+  subroutine sample_source_particle()
+
+    ! Set particle
+    call initialize_particle()
+
+    ! Sample the external source distribution
+    call sample_external_source(source_site)
+
+    ! Copy source attributes to the particle
+    call copy_source_attributes(source_site)
+
+  end subroutine sample_source_particle
 
 end module loafs_main

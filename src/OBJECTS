@@ -34,7 +34,7 @@ interpolation.o \
 input_xml.o \
 list_header.o \
 loafs_header.o \
-loafs_init.o \
+loafs_banks.o \
 loafs_input.o \
 loafs_main.o \
 main.o \
@@ -51,6 +51,7 @@ ppmlib.o \
 random_lcg.o \
 search.o \
 set_header.o \
+sort.o \
 source.o \
 source_header.o \
 state_point.o \

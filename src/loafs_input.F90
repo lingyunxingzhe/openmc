@@ -41,20 +41,29 @@ contains
     ! parse loafs.xml file
     call read_xml_file_loafs_t(filename)
 
-    ! Check number of particle sites
-    if (sites_ == 0) then
-      message = "Need to specify number of total starting particles."
-      call fatal_error()
-    end if
-      
-    n_particles = sites_
-    
-    
+    ! read energy grid
     if (associated(mesh_ % energy)) then
       ng = size(mesh_ % energy)
-      if(.not.allocated(loafs%egrid)) allocate(loafs%egrid(ng))
-      loafs%egrid = mesh_ % energy 
-      loafs%n_egroups = ng - 1
+      if(.not.allocated(loafs % egrid)) allocate(loafs % egrid(ng))
+      loafs % egrid = mesh_ % energy 
+      loafs % n_egroups = ng - 1
+    else
+      message = "Need to specify energy group structure."
+      call fatal_error()
+    end if
+    
+    ! read number of sites
+    if (associated(mesh_ % sites)) then
+      ng = size(mesh_ % sites)
+      if (ng /= loafs % n_egroups) then
+        message = "Size of storage sites must match the number of LOAFS zones."
+        call fatal_error()
+      end if
+      if(.not.allocated(loafs % max_sites)) allocate(loafs % max_sites(ng))
+      loafs % max_sites = mesh_ % sites
+    else
+      message = "Need to specify number of sites to store in each zone."
+      call fatal_error()
     end if
 
   end subroutine configure_loafs

@@ -11,7 +11,7 @@ module initialize
   use global
   use input_xml,        only: read_input_xml, read_cross_sections_xml,         &
                               cells_in_univ_dict, read_plots_xml
-  use loafs_init,       only: allocate_loafs_banks
+  use loafs_banks,      only: allocate_loafs_banks
   use output,           only: title, header, write_summary, print_version,     &
                               print_usage, write_xs_summary, print_plot
   use random_lcg,       only: initialize_prng
@@ -121,7 +121,6 @@ contains
       end if
 
       if (run_mode == MODE_LOAFS) then
-        call allocate_banks()
         call allocate_loafs_banks()
         call initialize_source()
       end if

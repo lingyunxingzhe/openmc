@@ -11,6 +11,7 @@ module physics
   use geometry_header, only: Universe, BASE_UNIVERSE
   use global
   use interpolation,   only: interpolate_tab1
+  use loafs_banks,     only: loafs_add_to_bank
   use material_header, only: Material
   use mesh,            only: get_mesh_indices
   use output,          only: write_message
@@ -71,21 +72,23 @@ contains
     ! Force calculation of cross-sections by setting last energy to zero 
     micro_xs % last_E = ZERO
 
-    loafs_last_ebin = binary_search(loafs % egrid, loafs % n_egroups+1, p % E)
+    if (loafs_run) then
+      loafs_last_ebin = binary_search(loafs % egrid, loafs % n_egroups+1, p % E)
+    end if
 
     do while (p % alive)
 
+      ! add to loafs site banks if appropriate
       if (loafs_run) then
-      
         loafs_ebin = binary_search(loafs % egrid, loafs % n_egroups+1, p % E)
-
         if (loafs_ebin /= loafs_last_ebin) then
-          loafs % scatter_bank_idx(loafs_ebin) = &
-                                      loafs % scatter_bank_idx(loafs_ebin) + 1
+          if (loafs % site_bank_idx(loafs_ebin) < loafs % max_sites(loafs_ebin)) then
+            loafs % site_bank_idx(loafs_ebin) = &
+                                        loafs % site_bank_idx(loafs_ebin) + 1
+            call loafs_add_to_bank(loafs_ebin)
+          end if
         end if
-
         loafs_last_ebin = loafs_ebin
-        
       end if
 
       ! Calculate microscopic and macroscopic cross sections -- note: if the
@@ -336,7 +339,7 @@ contains
       ! since absorption is treated implicitly. However, we still need to bank
       ! sites so we sample a fission reaction (if there are multiple) and bank
       ! the expected number of fission neutrons created.
-
+      
       if (survival_biasing) then
         cutoff = prn() * micro_xs(i_nuclide) % fission
         prob = ZERO
@@ -921,14 +924,11 @@ contains
     end if
 
     ! Bank source neutrons
-    if (nu == 0 .or. n_bank == 3*work) return
+    if (nu == 0 .or. n_bank == 3*work) then
+      if (.not. loafs_run) return
+    end if
     do i = int(n_bank,4) + 1, int(min(n_bank + nu, 3*work),4)
-      ! Bank source neutrons by copying particle data
-      fission_bank(i) % xyz = p % coord0 % xyz
-
-      ! Set weight of fission bank site
-      fission_bank(i) % wgt = ONE/weight
-
+      
       ! Sample cosine of angle -- fission neutrons are always emitted
       ! isotropically. Sometimes in ACE data, fission reactions actually have
       ! an angular distribution listed, but for those that do, it's simply just
@@ -939,7 +939,7 @@ contains
       if (prn() < beta) then
         ! ====================================================================
         ! DELAYED NEUTRON SAMPLED
-
+        
         ! sampled delayed precursor group
         xi = prn()
         lc = 1
@@ -1019,14 +1019,44 @@ contains
 
       end if
 
-      ! Sample azimuthal angle uniformly in [0,2*pi)
-      phi = TWO*PI*prn()
-      fission_bank(i) % uvw(1) = mu
-      fission_bank(i) % uvw(2) = sqrt(ONE - mu*mu) * cos(phi)
-      fission_bank(i) % uvw(3) = sqrt(ONE - mu*mu) * sin(phi)
+      if (.not. loafs_run) then
+      
+        ! Bank source neutrons by copying particle data
+        fission_bank(i) % xyz = p % coord0 % xyz
 
-      ! set energy of fission neutron
-      fission_bank(i) % E = E_out
+        ! Set weight of fission bank site
+        fission_bank(i) % wgt = ONE/weight
+
+        ! Sample azimuthal angle uniformly in [0,2*pi)
+        phi = TWO*PI*prn()
+        fission_bank(i) % uvw(1) = mu
+        fission_bank(i) % uvw(2) = sqrt(ONE - mu*mu) * cos(phi)
+        fission_bank(i) % uvw(3) = sqrt(ONE - mu*mu) * sin(phi)
+
+        ! set energy of fission neutron
+        fission_bank(i) % E = E_out
+        
+      else
+      
+        loafs_ebin = binary_search(loafs % egrid, loafs % n_egroups+1, E_out)
+        
+        if (loafs % site_bank_idx(loafs_ebin) < loafs % max_sites(loafs_ebin)) then
+        
+          loafs % site_bank_idx(loafs_ebin) = &
+                                        loafs % site_bank_idx(loafs_ebin) + 1
+                                        
+          loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % is_fission_site = .true.
+          loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % xyz = p % coord0 % xyz
+          loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % wgt = ONE/weight
+          phi = TWO*PI*prn()
+          loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % uvw(1) = mu
+          loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % uvw(2) = sqrt(ONE - mu*mu) * cos(phi)
+          loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % uvw(3) = sqrt(ONE - mu*mu) * sin(phi)
+          loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % E = E_out
+          
+        end if
+      end if
+      
     end do
 
     ! increment number of bank sites

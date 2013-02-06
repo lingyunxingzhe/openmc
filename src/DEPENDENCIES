@@ -196,7 +196,7 @@ initialize.o: geometry_header.o
 initialize.o: global.o
 initialize.o: hdf5_interface.o
 initialize.o: input_xml.o
-initialize.o: loafs_init.o
+initialize.o: loafs_banks.o
 initialize.o: output.o
 initialize.o: random_lcg.o
 initialize.o: source.o
@@ -232,14 +232,17 @@ interpolation.o: global.o
 interpolation.o: search.o
 interpolation.o: string.o
 
+loafs_main.o: bank_header.o
 loafs_main.o: global.o
 loafs_main.o: output.o
 loafs_main.o: physics.o
+loafs_main.o: random_lcg.o
+loafs_main.o: sort.o
 loafs_main.o: source.o
 
-loafs_init.o: global.o
-loafs_init.o: error.o
-loafs_init.o: string.o
+loafs_banks.o: global.o
+loafs_banks.o: error.o
+loafs_banks.o: string.o
 
 loafs_input.o: templates/loafs_t.o
 loafs_input.o: error.o
@@ -291,6 +294,7 @@ physics.o: geometry.o
 physics.o: geometry_header.o
 physics.o: global.o
 physics.o: interpolation.o
+physics.o: loafs_banks.o
 physics.o: material_header.o
 physics.o: mesh.o
 physics.o: output.o
@@ -320,6 +324,10 @@ search.o: error.o
 search.o: global.o
 
 set_header.o: list_header.o
+
+sort.o: error.o
+sort.o: global.o
+sort.o: loafs_header.o
 
 source.o: bank_header.o
 source.o: constants.o

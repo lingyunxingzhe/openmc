@@ -12,7 +12,7 @@ module loafs_header
 
   type, public :: LoafsBankSite
 
-    sequence
+    logical    :: is_fission_site
 
     real(8)    :: wgt    ! weight of bank site
     real(8)    :: xyz(3) ! location of bank particle
@@ -36,7 +36,15 @@ module loafs_header
     integer    :: n_bank        ! number of fission sites banked
     real(8)    :: wgt_bank      ! weight of fission sites banked
 
+    ! Energy grid data
+    integer    :: index_grid    ! index on unionized energy grid
+    real(8)    :: interp        ! interpolation factor for energy grid
+
+    ! Indices for various arrays
+    integer    :: surface       ! index for surface particle is on
     integer    :: cell_born     ! index for cell particle was born in
+    integer    :: material      ! index for current material
+    integer    :: last_material ! index for last material
 
     ! Statistical data
     integer    :: n_collision   ! # of collisions
@@ -59,14 +67,17 @@ module loafs_header
 
   type, public :: loafs_type
 
-    ! energy grid
-    real(8), allocatable :: egrid(:)
-    
-    integer              :: n_egroups
-    
-    type(LoafsBank), allocatable :: scatter_banks(:)
-    integer, allocatable         :: scatter_bank_idx(:)
+    real(8), allocatable          :: egrid(:)         ! energy grid
 
+    integer                       :: n_egroups
+    
+    integer, allocatable          :: max_sites(:)
+    
+    type(LoafsBank), allocatable  :: site_banks(:)
+    integer, allocatable          :: site_bank_idx(:)
+    
+    real(8)                       :: total_weight
+    
   end type loafs_type
 
 contains
