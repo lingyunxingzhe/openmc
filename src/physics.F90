@@ -11,7 +11,7 @@ module physics
   use geometry_header, only: Universe, BASE_UNIVERSE
   use global
   use interpolation,   only: interpolate_tab1
-  use loafs_banks,     only: loafs_add_to_bank
+  use loafs_banks,     only: loafs_particle_to_bank
   use material_header, only: Material
   use mesh,            only: get_mesh_indices
   use output,          only: write_message
@@ -30,7 +30,9 @@ contains
 ! TRANSPORT encompasses the main logic for moving a particle through geometry.
 !===============================================================================
 
-  subroutine transport()
+  subroutine transport(one_collision)
+
+    logical, optional, intent(in) :: one_collision ! flag to move p only once
 
     integer :: surface_crossed ! surface which particle is on
     integer :: lattice_crossed ! lattice boundary which particle crossed
@@ -40,6 +42,7 @@ contains
     real(8) :: d_collision     ! sampled distance to collision
     real(8) :: distance        ! distance particle travels
     logical :: found_cell      ! found cell which particle is in?
+    logical :: collide_once    ! flag for ending transport after one collision
     type(LocalCoord), pointer :: coord => null()
 
     ! Display message if high verbosity or trace is on
@@ -65,6 +68,13 @@ contains
 
     ! Initialize number of events to zero
     n_event = 0
+    
+    
+    if (present(one_collision) .and. one_collision) then
+      collide_once = .true.
+    else
+      collide_once = .false.
+    end if
 
     ! Add paricle's starting weight to count for normalizing tallies later
     total_weight = total_weight + p % wgt
@@ -72,23 +82,32 @@ contains
     ! Force calculation of cross-sections by setting last energy to zero 
     micro_xs % last_E = ZERO
 
-    if (loafs_run) then
-      loafs_last_ebin = binary_search(loafs % egrid, loafs % n_egroups+1, p % E)
-    end if
-
     do while (p % alive)
 
       ! add to loafs site banks if appropriate
       if (loafs_run) then
         loafs_ebin = binary_search(loafs % egrid, loafs % n_egroups+1, p % E)
-        if (loafs_ebin /= loafs_last_ebin) then
-          if (loafs % site_bank_idx(loafs_ebin) < loafs % max_sites(loafs_ebin)) then
-            loafs % site_bank_idx(loafs_ebin) = &
-                                        loafs % site_bank_idx(loafs_ebin) + 1
-            call loafs_add_to_bank(loafs_ebin)
+        if (loafs_site_gen) then
+          if (loafs_ebin /= loafs_last_ebin) then
+            if (loafs % site_bank_idx(loafs_ebin) < &
+                                             loafs % max_sites(loafs_ebin)) then
+              loafs % site_bank_idx(loafs_ebin) = &
+                                           loafs % site_bank_idx(loafs_ebin) + 1
+              call loafs_particle_to_bank(loafs_ebin, &
+                                              loafs % site_bank_idx(loafs_ebin))
+            else
+              loafs % extra_weights(loafs_ebin) = &
+                                     loafs % extra_weights(loafs_ebin) + p % wgt
+            end if
+          end if
+          loafs_last_ebin = loafs_ebin
+        else
+          if (loafs_ebin /= loafs_active_ebin) then
+            p % alive = .false.
+            exit
           end if
         end if
-        loafs_last_ebin = loafs_ebin
+        
       end if
 
       ! Calculate microscopic and macroscopic cross sections -- note: if the
@@ -178,6 +197,9 @@ contains
           ! Advance coordinate level
           coord => coord % next
         end do
+        
+!        if (collide_once) exit
+        
       end if
 
       ! If particle has too many events, display warning and kill it
@@ -188,7 +210,7 @@ contains
         call warning()
         p % alive = .false.
       end if
-
+      
     end do
 
   end subroutine transport
@@ -924,8 +946,11 @@ contains
     end if
 
     ! Bank source neutrons
-    if (nu == 0 .or. n_bank == 3*work) then
-      if (.not. loafs_run) return
+    if (nu == 0) return
+    if (loafs_run) then
+      if (n_bank == loafs % fission_bank_size) return
+    else
+      if (n_bank == 3*work) return
     end if
     do i = int(n_bank,4) + 1, int(min(n_bank + nu, 3*work),4)
       
@@ -1019,7 +1044,7 @@ contains
 
       end if
 
-      if (.not. loafs_run) then
+!      if (.not. loafs_run) then
       
         ! Bank source neutrons by copying particle data
         fission_bank(i) % xyz = p % coord0 % xyz
@@ -1036,26 +1061,35 @@ contains
         ! set energy of fission neutron
         fission_bank(i) % E = E_out
         
-      else
+!      else
       
-        loafs_ebin = binary_search(loafs % egrid, loafs % n_egroups+1, E_out)
-        
-        if (loafs % site_bank_idx(loafs_ebin) < loafs % max_sites(loafs_ebin)) then
-        
-          loafs % site_bank_idx(loafs_ebin) = &
-                                        loafs % site_bank_idx(loafs_ebin) + 1
-                                        
-          loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % is_fission_site = .true.
-          loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % xyz = p % coord0 % xyz
-          loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % wgt = ONE/weight
-          phi = TWO*PI*prn()
-          loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % uvw(1) = mu
-          loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % uvw(2) = sqrt(ONE - mu*mu) * cos(phi)
-          loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % uvw(3) = sqrt(ONE - mu*mu) * sin(phi)
-          loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % E = E_out
+!        if (loafs_site_gen) then
+!      
+!          loafs_ebin = binary_search(loafs % egrid, loafs % n_egroups+1, E_out)
+!          
+!          if (loafs % site_bank_idx(loafs_ebin) < loafs % max_sites(loafs_ebin)) then
+!          
+!            loafs % site_bank_idx(loafs_ebin) = &
+!                                          loafs % site_bank_idx(loafs_ebin) + 1
+!                                          
+!            loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % is_fission_site = .true.
+!            loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % xyz = p % coord0 % xyz
+!            loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % wgt = ONE/weight
+!            phi = TWO*PI*prn()
+!            loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % uvw(1) = mu
+!            loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % uvw(2) = sqrt(ONE - mu*mu) * cos(phi)
+!            loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % uvw(3) = sqrt(ONE - mu*mu) * sin(phi)
+!            loafs % site_banks(loafs_ebin) % sites(loafs % site_bank_idx(loafs_ebin)) % E = E_out
+!          
+!          else
           
-        end if
-      end if
+!            loafs % extra_weights(loafs_ebin) = &
+!                                  loafs % extra_weights(loafs_ebin) + ONE/weight
+          
+!          end if
+          
+!        end if
+!      end if
       
     end do
 

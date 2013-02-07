@@ -8,6 +8,7 @@
     <component name="sites"       type="double-array"  />
   </typedef>
 
-  <variable name="mesh_"           tag="mesh"           type="mesh_xml"                                     />
+  <variable name="mesh_"                tag="mesh"                type="mesh_xml"                                     />
+  <variable name="fission_bank_size_"   tag="fission_bank_size"   type="integer"                                      />
 
 </template>

@@ -12,7 +12,8 @@ module loafs_header
 
   type, public :: LoafsBankSite
 
-    logical    :: is_fission_site
+
+    integer(8) :: id
 
     real(8)    :: wgt    ! weight of bank site
     real(8)    :: xyz(3) ! location of bank particle
@@ -77,6 +78,9 @@ module loafs_header
     integer, allocatable          :: site_bank_idx(:)
     
     real(8)                       :: total_weight
+    real(8),allocatable           :: extra_weights(:)
+    
+    integer                       :: fission_bank_size
     
   end type loafs_type
 

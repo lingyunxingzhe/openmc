@@ -65,6 +65,13 @@ contains
       message = "Need to specify number of sites to store in each zone."
       call fatal_error()
     end if
+    
+    if (fission_bank_size_ >= 0) then
+      loafs % fission_bank_size = fission_bank_size_
+    else
+      message = "Need to specify size of LOAFS fission bank."
+      call fatal_error()
+    end if
 
   end subroutine configure_loafs
 

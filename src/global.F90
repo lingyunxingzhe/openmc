@@ -375,6 +375,8 @@ module global
   integer :: loafs_ebin ! index in the loafs energy grid of the current particle
   integer :: loafs_last_ebin ! previous loafs ebin index
   integer :: loafs_active_ebin ! index of currently running loafs energy range
+  
+  logical :: loafs_site_gen = .false.
 
 contains
 

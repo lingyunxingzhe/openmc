@@ -4,6 +4,8 @@ module sort
   use global,         only: message
   use loafs_header,   only: LoafsBankSite
 
+  ! TODO: implement smooth sort and quicksort for comparison
+
   interface heap_sort
     module procedure heap_sort_loafs_bank_sites, heap_sort_real8
   end interface heap_sort
@@ -14,9 +16,9 @@ module sort
 
 contains
 
-
 !===============================================================================
-! HEAP_SORT performs an in-place heap sort on an array
+! HEAP_SORT performs an in-place heap sort on an array, guaranteed O(n log n)
+! and O(1) in memory.
 !===============================================================================
 
   !=============================================
