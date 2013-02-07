@@ -7,7 +7,7 @@ program main
   use global
   use initialize,   only: initialize_run
   use loafs_main,   only: run_loafs
-  use plotter,      only: run_plot
+  use plot,         only: run_plot
 
   implicit none
 
