@@ -89,7 +89,6 @@ contains
     ! Force calculation of cross-sections by setting last energy to zero 
     micro_xs % last_E = ZERO
 
-
     do while (p % alive)
 
       ! add to loafs site banks if appropriate
@@ -112,10 +111,6 @@ contains
         else
           if (loafs_ebin /= loafs_active_ebin) then
             p % alive = .false.
-            if (loafs_active_ebin == 1) then
-              debug2 = debug2 + 1
-            end if
-            write (*,*)"out of bin, exiting transport"
             exit
           end if
         end if
@@ -152,11 +147,6 @@ contains
       if (.not. loafs_site_gen .and. active_tracklength_tallies % size() > 0) &
            call score_tracklength_tally(distance)
 
-      if (loafs_ebin == 1) then
-        debug1 = debug1 + 1
-        debug4 = debug4 + p % wgt
-      end if
-      
       ! Score track-length estimate of k-eff
       if (.not. loafs_site_gen) then
         global_tallies(K_TRACKLENGTH) % value = &

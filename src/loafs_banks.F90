@@ -74,8 +74,6 @@ contains
     loafs % site_banks(bin) % sites(i) % wgt_bank = p % wgt_bank
     loafs % site_banks(bin) % sites(i) % surface = p % surface
     loafs % site_banks(bin) % sites(i) % cell_born = p % cell_born
-    loafs % site_banks(bin) % sites(i) % material = p % material
-    loafs % site_banks(bin) % sites(i) % last_material = p % last_material
     loafs % site_banks(bin) % sites(i) % n_collision = p % n_collision
 
   end subroutine loafs_particle_to_bank

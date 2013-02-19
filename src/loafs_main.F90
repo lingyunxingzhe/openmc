@@ -64,12 +64,6 @@ contains
         ! ====================================================================
         ! RUN PARTICLES
         
-        debug1 = 0
-        debug2 = 0
-        debug3 = 0
-        debug4 = 0.0_8
-        debug5 = 0
-        
         ! generate bin sites
         call time_transport % start()
         if (current_batch == 1) then
@@ -79,37 +73,14 @@ contains
         end if
         call time_transport % stop()
         
-!        write(*,*)"needed scores to keff",debug1
-!        write(*,*)"weights to keff",int(debug4)
-!        write(*,*)"calls to transport",debug5
-        
-!        write(*,*)"wgts to transport",debug4
-!        write(*,*)'times transport called for group 4',debug5
-        
         ! sort by starting energy
         call sort_sites()
-        
-        debug1 = 0
-        debug2 = 0
-        debug3 = 0
-        debug4 = 0.0_8
-        debug5 = 0
-        
-!        write(*,*)
         
         ! run bin sites
         call time_transport % start()
         call mc_fixed_source()
         call time_transport % stop()
         
-!        write(*,*)"actual scores to keff",debug1
-!        write(*,*)"weights to keff",int(debug4)
-!        write(*,*)"wgts transported",debug4
-!        write(*,*)"out of bin cuts",debug2
-!        write(*,*)"calls to transport",debug5
-        
-!        total_weight = loafs % total_weight
-
         ! Distribute fission bank across processors evenly
         call time_bank % start()
 !        call synchronize_bank()
@@ -223,7 +194,6 @@ contains
     ! ==========================================================================
     ! LOOP UNTIL ALL SITES GENERATED
     SITE_LOOP: do while (.not. all(loafs % site_bank_idx >= loafs % max_sites))
-!    SITE_LOOP: do while (.not. any(loafs % site_bank_idx >= loafs % max_sites))
     
       p % id = i
       
@@ -252,7 +222,6 @@ contains
     
     loafs_site_gen = .false.
 
-!    write(*,*)'particles started for site gen',i
 !    write(*,*)loafs % extra_weights
 !    write(*,*)loafs % total_weight
     

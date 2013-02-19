@@ -44,8 +44,6 @@ module loafs_header
     ! Indices for various arrays
     integer    :: surface       ! index for surface particle is on
     integer    :: cell_born     ! index for cell particle was born in
-    integer    :: material      ! index for current material
-    integer    :: last_material ! index for last material
 
     ! Statistical data
     integer    :: n_collision   ! # of collisions
