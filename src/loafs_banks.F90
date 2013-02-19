@@ -1,5 +1,6 @@
 module loafs_banks
 
+  use constants
   use error,            only: fatal_error
   use global
   use particle_header,  only: deallocate_coord
@@ -77,7 +78,6 @@ contains
     loafs % site_banks(bin) % sites(i) % last_material = p % last_material
     loafs % site_banks(bin) % sites(i) % n_collision = p % n_collision
 
-    
   end subroutine loafs_particle_to_bank
 
 
@@ -92,11 +92,12 @@ contains
     
     call deallocate_coord(p % coord0 % next)
     p % coord => p % coord0
+    p % coord % cell = NONE
     
     p % id = loafs % site_banks(bin) % sites(i) % id
     p % wgt = loafs % site_banks(bin) % sites(i) % wgt
-    p % coord0 % xyz = loafs % site_banks(bin) % sites(i) % xyz
-    p % coord0 % uvw = loafs % site_banks(bin) % sites(i) % uvw
+    p % coord % xyz = loafs % site_banks(bin) % sites(i) % xyz
+    p % coord % uvw = loafs % site_banks(bin) % sites(i) % uvw
     p % E = loafs % site_banks(bin) % sites(i) % E
     p % mu = loafs % site_banks(bin) % sites(i) % mu
     p % last_xyz = loafs % site_banks(bin) % sites(i) % last_xyz
@@ -110,8 +111,8 @@ contains
     p % wgt_bank = loafs % site_banks(bin) % sites(i) % wgt_bank
     p % surface = loafs % site_banks(bin) % sites(i) % surface
     p % cell_born = loafs % site_banks(bin) % sites(i) % cell_born
-    p % material = loafs % site_banks(bin) % sites(i) % material
-    p % last_material = loafs % site_banks(bin) % sites(i) % last_material
+    p % material = NONE
+    p % last_material = NONE
     p % n_collision = loafs % site_banks(bin) % sites(i) % n_collision
 
     p % alive = .true.

@@ -19,7 +19,7 @@ include OBJECTS
 COMPILER = intel
 DEBUG    = yes
 PROFILE  = no
-OPTIMIZE = no
+OPTIMIZE = yes
 MPI      = no
 HDF5     = no
 PETSC    = no

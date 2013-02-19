@@ -23,14 +23,19 @@ contains
 
   !=============================================
   ! HEAP_SORT_REAL8
-  subroutine heap_sort_real8(array)
+  subroutine heap_sort_real8(array, length)
 
-    real(8), intent(inout) :: array(:)
+    real(8), intent(inout)        :: array(:)
+    integer, intent(in), optional :: length
 
     integer                            :: start, n, end_
     real(8)                            :: tmp
 
-    n = size(array)
+    if (present(length)) then
+      n = length
+    else
+      n = size(array)
+    end if
 
     do start = (n - 2) / 2 + 1, 1, -1
       call sift_down(array, start, n)
@@ -48,14 +53,19 @@ contains
 
   !=============================================
   ! HEAP_SORT_LOAFS_BANK_SITES
-  subroutine heap_sort_loafs_bank_sites(array)
+  subroutine heap_sort_loafs_bank_sites(array, length)
 
     type(LoafsBankSite), intent(inout) :: array(:)
+    integer, intent(in), optional      :: length
 
     integer                            :: start, n, end_
     type(LoafsBankSite)                :: tmp
 
-    n = size(array)
+    if (present(length)) then
+      n = length
+    else
+      n = size(array)
+    end if
 
     do start = (n - 2) / 2 + 1, 1, -1
       call sift_down(array, start, n)

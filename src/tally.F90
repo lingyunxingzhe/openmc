@@ -1746,7 +1746,7 @@ contains
         call accumulate_tally(tallies(active_tallies % get_item(i)))
       end do
 
-      if (run_mode == MODE_EIGENVALUE) then
+      if (run_mode == MODE_EIGENVALUE .or. run_mode == MODE_LOAFS) then
         ! Get the current batch estimate of k_analog for displaying to output
         ! --- this has to be performed after reduce_tally_values and before
         ! accumulate_result
