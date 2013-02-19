@@ -1640,6 +1640,9 @@ contains
             end do
 
           case ('surface')
+            message = "Surface filter is not yet supported!"
+            call fatal_error()
+
             ! Set type of filter
             t % filters(j) % type = FILTER_SURFACE
 
