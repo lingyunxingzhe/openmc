@@ -373,9 +373,9 @@ module global
   ! Main object
   type(loafs_type) :: loafs
   
-  integer :: loafs_ebin ! index in the loafs energy grid of the current particle
-  integer :: loafs_last_ebin   ! previous loafs ebin index
-  integer :: loafs_active_ebin ! index of currently running loafs energy range
+  integer :: loafs_bin        ! index in the loafs bin grid current particle
+  integer :: loafs_last_bin   ! previous loafs bin index
+  integer :: loafs_active_bin ! index of currently running loafs bin
   
   logical :: loafs_site_gen = .false.
 

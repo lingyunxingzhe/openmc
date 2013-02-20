@@ -11,7 +11,7 @@ module physics
   use geometry_header, only: Universe, BASE_UNIVERSE
   use global
   use interpolation,   only: interpolate_tab1
-  use loafs_banks,     only: loafs_particle_to_bank
+  use loafs_banks,     only: loafs_transport_check
   use material_header, only: Material
   use mesh,            only: get_mesh_indices
   use output,          only: write_message
@@ -91,30 +91,10 @@ contains
 
     do while (p % alive)
 
-      ! add to loafs site banks if appropriate
+      ! add to loafs site banks or kill particle if appropriate
       if (loafs_run) then
-        loafs_ebin = binary_search(loafs % egrid, loafs % n_egroups+1, p % E)
-        if (loafs_site_gen) then
-          if (loafs_ebin /= loafs_last_ebin) then
-            if (loafs % site_bank_idx(loafs_ebin) < &
-                                             loafs % max_sites(loafs_ebin)) then
-              loafs % site_bank_idx(loafs_ebin) = &
-                                           loafs % site_bank_idx(loafs_ebin) + 1
-              call loafs_particle_to_bank(loafs_ebin, &
-                                              loafs % site_bank_idx(loafs_ebin))
-            else
-              loafs % extra_weights(loafs_ebin) = &
-                                     loafs % extra_weights(loafs_ebin) + p % wgt
-            end if
-          end if
-          loafs_last_ebin = loafs_ebin
-        else
-          if (loafs_ebin /= loafs_active_ebin) then
-            p % alive = .false.
-            exit
-          end if
-        end if
-        
+        call loafs_transport_check()
+        if (.not. p % alive) exit
       end if
 
       ! Calculate microscopic and macroscopic cross sections -- note: if the

@@ -4,6 +4,7 @@ module loafs_banks
   use error,            only: fatal_error
   use global
   use particle_header,  only: deallocate_coord
+  use search,           only: binary_search
   use string,           only: to_str
 
   implicit none
@@ -46,6 +47,37 @@ contains
     end if
     
   end subroutine allocate_loafs_banks
+
+
+!===============================================================================
+! LOAFS_TRANSPORT_CHECK
+!===============================================================================
+
+  subroutine loafs_transport_check()
+  
+    loafs_bin = binary_search(loafs % egrid, loafs % n_egroups + 1, p % E)
+    
+    if (loafs_site_gen) then
+    
+      if (loafs_bin /= loafs_last_bin) then
+        if (loafs % site_bank_idx(loafs_bin) < loafs % max_sites(loafs_bin)) then
+          loafs % site_bank_idx(loafs_bin) = loafs % site_bank_idx(loafs_bin) + 1
+          call loafs_particle_to_bank(loafs_bin,loafs % site_bank_idx(loafs_bin))
+        else
+          loafs % extra_weights(loafs_bin) = loafs % extra_weights(loafs_bin) + p % wgt
+        end if
+      end if
+      
+      loafs_last_bin = loafs_bin
+      
+    else
+    
+      if (loafs_bin /= loafs_active_bin) p % alive = .false.
+      
+    end if
+    
+  end subroutine loafs_transport_check
+
 
 !===============================================================================
 ! LOAFS_PARTICLE_TO_BANK

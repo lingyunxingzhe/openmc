@@ -211,7 +211,7 @@ contains
       loafs % total_weight = loafs % total_weight + p % wgt
 
       ! transport particle
-      loafs_last_ebin = -1 ! force the starting site to be banked
+      loafs_last_bin = -1 ! force the starting site to be banked
       call transport()
 
 !      write(*,*)p%id,loafs % site_bank_idx
@@ -222,9 +222,6 @@ contains
     
     loafs_site_gen = .false.
 
-!    write(*,*)loafs % extra_weights
-!    write(*,*)loafs % total_weight
-    
     call distribute_extra_weight()
     
   end subroutine mc_create_sites
@@ -263,15 +260,15 @@ contains
     
     ! ==========================================================================
     ! LOOP OVER LOAFS BINS - TODO: parallelize this loop
-    LOAFS_BIN_LOOP: do loafs_active_ebin = loafs % n_egroups, 1, -1
+    LOAFS_BIN_LOOP: do loafs_active_bin = loafs % n_egroups, 1, -1
 
-!      write(*,*) loafs_active_ebin
+!      write(*,*) loafs_active_bin
 
       ! ========================================================================
       ! RUN ALL PARTICLES IN BANK
-      PARTICLE_LOOP: do i=loafs % site_bank_idx(loafs_active_ebin), 1, -1
+      PARTICLE_LOOP: do i=loafs % site_bank_idx(loafs_active_bin), 1, -1
 
-        call loafs_bank_to_particle(loafs_active_ebin, i)
+        call loafs_bank_to_particle(loafs_active_bin, i)
         
         call transport()
         
