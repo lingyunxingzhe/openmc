@@ -199,7 +199,6 @@ contains
         message = "Particle " // trim(to_str(p%id)) // " underwent maximum &
              &number of events."
         call warning()
-!        write(*,*)"exiting 1"
         p % alive = .false.
       end if
       
@@ -241,7 +240,6 @@ contains
 
     ! check for very low energy
     if (p % E < 1.0e-100_8) then
-!      write(*,*)"exiting2"
       p % alive = .false.
       message = "Killing neutron with extremely low energy"
       call warning()
@@ -330,6 +328,14 @@ contains
       p % wgt = p % wgt - p % absorb_wgt
       p % last_wgt = p % wgt
 
+      ! Score implicit absorption estimate of keff. Unlike the analog absorption
+      ! estimate, this only needs to be scored to in one place.
+      if (.not. loafs_site_gen) then
+        global_tallies(K_ABSORPTION) % value = &
+             global_tallies(K_ABSORPTION) % value + p % absorb_wgt * &
+             material_xs % nu_fission / material_xs % absorption
+      end if
+      
     else
       ! set cutoff variable for analog cases
       cutoff = prn() * micro_xs(i_nuclide) % total
@@ -341,7 +347,16 @@ contains
 
       ! See if disappearance reaction happens
       if (prob > cutoff) then
-!        write(*,*)"exiting3"
+
+        ! Score absorption estimate of keff. Note that this appears in three
+        ! places -- absorption reactions, total fission reactions, and
+        ! first/second/etc chance fission reactions
+        if (.not. loafs_site_gen) then
+          global_tallies(K_ABSORPTION) % value = &
+               global_tallies(K_ABSORPTION) % value + p % wgt * &
+               material_xs % nu_fission / material_xs % absorption
+        end if
+        
         p % alive = .false.
         p % event = EVENT_ABSORB
         p % event_MT = N_DISAPPEAR
@@ -378,7 +393,16 @@ contains
           ! With no survival biasing, the particle is absorbed and so its
           ! life is over
           if (.not. survival_biasing) then
-!            write(*,*)"exiting4"
+          
+            ! Score absorption estimate of keff. Note that this appears in three
+            ! places -- absorption reactions, total fission reactions, and
+            ! first/second/etc chance fission reactions
+            if (.not. loafs_site_gen) then
+              global_tallies(K_ABSORPTION) % value = &
+                   global_tallies(K_ABSORPTION) % value + p % wgt * &
+                   material_xs % nu_fission / material_xs % absorption
+            end if
+            
             p % alive = .false.
             p % event = EVENT_FISSION
             p % event_MT = rxn % MT
@@ -414,9 +438,17 @@ contains
               ! loop
               exit FISSION_REACTION_LOOP
             else
+              ! Score absorption estimate of keff. Note that this appears in
+              ! three places -- absorption reactions, total fission reactions,
+              ! and first/second/etc chance fission reactions
+              if (.not. loafs_site_gen) then
+                global_tallies(K_ABSORPTION) % value = &
+                     global_tallies(K_ABSORPTION) % value + p % wgt * &
+                     material_xs % nu_fission / material_xs % absorption
+              end if
+              
               ! With no survival biasing, the particle is absorbed and so
               ! its life is over
-!              write(*,*)"exiting5"
               p % alive = .false.
               p % event = EVENT_FISSION
               p % event_MT = rxn % MT
