@@ -4,6 +4,7 @@ module loafs_banks
   use error,            only: fatal_error
   use global
   use particle_header,  only: deallocate_coord
+  use random_lcg,       only: prn
   use search,           only: binary_search
   use string,           only: to_str
 
@@ -23,6 +24,7 @@ contains
     allocate(loafs % extra_weights(loafs % n_egroups), STAT=alloc_err)
 
     ! Allocate banks
+    allocate(loafs % source_banks(loafs % n_egroups), STAT=alloc_err)
     allocate(loafs % site_banks(loafs % n_egroups), STAT=alloc_err)
     allocate(loafs % site_bank_idx(loafs % n_egroups), STAT=alloc_err)
     do i=1,loafs % n_egroups
@@ -36,8 +38,20 @@ contains
                   // to_str(i) // "."
         call fatal_error()
       end if
-
+      
+      allocate(loafs % source_banks(i) % sites(loafs % max_sites(i)), & 
+                                                                 STAT=alloc_err)
+                                                                 
+      ! Check for allocation errors 
+      if (alloc_err /= 0) then
+        message = "Failed to allocate LOAFS source bank for group " & 
+                  // to_str(i) // "."
+        call fatal_error()
+      end if
+      
     end do
+
+    ! TODO: currently the fission bank isn't used
 
     allocate(fission_bank(loafs % fission_bank_size), STAT=alloc_err)
     
@@ -112,10 +126,73 @@ contains
 
 
 !===============================================================================
-! LOAFS_BANK_TO_PARTICLE
+! COPY_SITES_TO_SOURCE
 !===============================================================================
 
-  subroutine loafs_bank_to_particle(bin, i)
+  subroutine copy_sites_to_source()
+  
+    integer :: bin
+    integer :: site_idx
+    integer :: source_idx
+    
+    real(8) :: real_weight
+    real(8) :: extra_weight
+    real(8) :: ratio
+    
+    
+    do bin = 1, loafs % n_egroups
+      
+      source_idx = 0  
+      site_idx = 0
+      extra_weight = 0.0_8
+      real_weight = 0.0_8
+      
+      do while (source_idx < loafs % max_sites(bin))
+      
+        source_idx = source_idx + 1
+      
+        if (site_idx <= loafs % site_bank_idx(bin)) then
+          ! copy from banked sites to the source
+          site_idx = site_idx + 1
+          real_weight = real_weight + &
+                                 loafs % site_banks(bin) % sites(site_idx) % wgt
+        else
+          ! sample a site from the banked sites and note the extra weight
+          site_idx = 0
+          do while (site_idx == 0) 
+            site_idx = prn()*loafs % max_sites(bin)
+          end do
+          extra_weight = extra_weight + &
+                                 loafs % site_banks(bin) % sites(site_idx) % wgt
+        end if
+      
+        loafs % source_banks(bin) % sites(source_idx) = &
+                                       loafs % site_banks(bin) % sites(site_idx) 
+      
+      end do 
+      
+      ! reduce the weights if we had extra weights
+      if (extra_weight > 0.0_8) then
+      
+        ratio = real_weight/(real_weight+extra_weight)
+        do source_idx = 1,loafs % max_sites(bin)
+          loafs % source_banks(bin) % sites(source_idx) % wgt = &
+                     loafs % source_banks(bin) % sites(source_idx) % wgt * ratio
+        end do
+      
+      end if
+    
+    end do
+  
+
+    
+  end subroutine copy_sites_to_source
+
+!===============================================================================
+! LOAFS_SOURCE_TO_PARTICLE
+!===============================================================================
+
+  subroutine loafs_source_to_particle(bin, i)
 
     integer, intent(in) :: bin
     integer, intent(in) :: i
@@ -124,30 +201,30 @@ contains
     p % coord => p % coord0
     p % coord % cell = NONE
     
-    p % id = loafs % site_banks(bin) % sites(i) % id
-    p % wgt = loafs % site_banks(bin) % sites(i) % wgt
-    p % coord % xyz = loafs % site_banks(bin) % sites(i) % xyz
-    p % coord % uvw = loafs % site_banks(bin) % sites(i) % uvw
-    p % E = loafs % site_banks(bin) % sites(i) % E
-    p % mu = loafs % site_banks(bin) % sites(i) % mu
-    p % last_xyz = loafs % site_banks(bin) % sites(i) % last_xyz
-    p % last_wgt = loafs % site_banks(bin) % sites(i) % last_wgt
-    p % last_E = loafs % site_banks(bin) % sites(i) % last_E
-    p % absorb_wgt = loafs % site_banks(bin) % sites(i) % absorb_wgt
-    p % event = loafs % site_banks(bin) % sites(i) % event
-    p % event_nuclide = loafs % site_banks(bin) % sites(i) % event_nuclide
-    p % event_MT = loafs % site_banks(bin) % sites(i) % event_MT
-    p % n_bank = loafs % site_banks(bin) % sites(i) % n_bank
-    p % wgt_bank = loafs % site_banks(bin) % sites(i) % wgt_bank
-    p % surface = loafs % site_banks(bin) % sites(i) % surface
-    p % cell_born = loafs % site_banks(bin) % sites(i) % cell_born
+    p % id = loafs % source_banks(bin) % sites(i) % id
+    p % wgt = loafs % source_banks(bin) % sites(i) % wgt
+    p % coord % xyz = loafs % source_banks(bin) % sites(i) % xyz
+    p % coord % uvw = loafs % source_banks(bin) % sites(i) % uvw
+    p % E = loafs % source_banks(bin) % sites(i) % E
+    p % mu = loafs % source_banks(bin) % sites(i) % mu
+    p % last_xyz = loafs % source_banks(bin) % sites(i) % last_xyz
+    p % last_wgt = loafs % source_banks(bin) % sites(i) % last_wgt
+    p % last_E = loafs % source_banks(bin) % sites(i) % last_E
+    p % absorb_wgt = loafs % source_banks(bin) % sites(i) % absorb_wgt
+    p % event = loafs % source_banks(bin) % sites(i) % event
+    p % event_nuclide = loafs % source_banks(bin) % sites(i) % event_nuclide
+    p % event_MT = loafs % source_banks(bin) % sites(i) % event_MT
+    p % n_bank = loafs % source_banks(bin) % sites(i) % n_bank
+    p % wgt_bank = loafs % source_banks(bin) % sites(i) % wgt_bank
+    p % surface = loafs % source_banks(bin) % sites(i) % surface
+    p % cell_born = loafs % source_banks(bin) % sites(i) % cell_born
     p % material = NONE
     p % last_material = NONE
-    p % n_collision = loafs % site_banks(bin) % sites(i) % n_collision
+    p % n_collision = loafs % source_banks(bin) % sites(i) % n_collision
 
     p % alive = .true.
     
-  end subroutine loafs_bank_to_particle
+  end subroutine loafs_source_to_particle
 
 !===============================================================================
 ! DISTRIBUTE_EXTRA_WEIGHT
@@ -157,6 +234,10 @@ contains
 
     integer :: bin, i
     real(8) :: sliver
+    
+    ! TODO: add a bin-wise total weight counter to the loafs object to properly
+    ! re-weight with ratios instead of the additive stuff (incorrect when not
+    ! all particles have the same weight)
     
     do bin = 1, loafs % n_egroups
     

@@ -2,8 +2,8 @@ module loafs_main
 
   use bank_header
   use global
-  use loafs_banks,  only: loafs_bank_to_particle, loafs_particle_to_bank, &
-                          distribute_extra_weight
+  use loafs_banks,  only: loafs_source_to_particle, loafs_particle_to_bank, &
+                          distribute_extra_weight, copy_sites_to_source
   use math,         only: t_percentile
   use output,       only: write_message, header, print_columns, &
                           print_batch_keff, print_generation
@@ -30,9 +30,10 @@ contains
     if (master) call header("LOAFS SIMULATION", level=1)
   
     ! these normally done in input_xml
-    n_batches = 5
-    n_inactive = 1
+    n_batches = 50
+    n_inactive = 10
     n_active = n_batches - n_inactive
+    current_gen = 1
     gen_per_batch = 1
     allocate(k_batch(n_batches))
     allocate(entropy(n_batches*gen_per_batch))
@@ -48,6 +49,8 @@ contains
 
     ! Turn on inactive timer
     call time_inactive % start()
+
+    call mc_create_sites(.false.)
     
     ! ==========================================================================
     ! LOOP OVER BATCHES
@@ -55,44 +58,33 @@ contains
 
       call initialize_batch()
 
-      ! =======================================================================
-      ! LOOP OVER GENERATIONS
-      GENERATION_LOOP: do current_gen = 1, gen_per_batch
-
-        call initialize_generation()
-
-        ! ====================================================================
-        ! RUN PARTICLES
-        
-        ! generate bin sites
-        call time_transport % start()
-        if (current_batch == 1) then
-          call mc_create_sites(.false.)
-        else
-          call mc_create_sites(.true.)
-        end if
-        call time_transport % stop()
-        
-        ! sort by starting energy
-        call sort_sites()
-        
-        ! run bin sites
-        call time_transport % start()
-        call mc_fixed_source()
-        call time_transport % stop()
-        
-        ! Distribute fission bank across processors evenly
-        call time_bank % start()
+      ! ====================================================================
+      ! RUN PARTICLES
+      
+      ! generate bin sites
+!        call time_transport % start()
+!        if (current_batch == 1) then
+!          call mc_create_sites(.false.)
+!        else
+!          call mc_create_sites(.true.)
+!        end if
+!        call time_transport % stop()
+      
+      ! sort by starting energy
+!        call sort_sites()
+      
+      ! run bin sites
+      call time_transport % start()
+      call mc_fixed_source()
+      call time_transport % stop()
+      
+      ! Distribute fission bank across processors evenly
+      call time_bank % start()
 !        call synchronize_bank()
-        call time_bank % stop()
+      call time_bank % stop()
 
-        ! Calculate shannon entropy
+      ! Calculate shannon entropy
 !        if (entropy_on) call shannon_entropy() ! TODO
-
-        ! Write generation output
-        if (master .and. current_gen /= gen_per_batch) call print_generation()
-
-      end do GENERATION_LOOP
 
       call finalize_batch()
 
@@ -110,11 +102,17 @@ contains
 
   subroutine initialize_batch()
 
+!    integer :: bin
+
     message = "Simulating batch " // trim(to_str(current_batch)) // "..."
     call write_message(8)
 
     ! Reset total starting particle weight used for normalizing tallies
     total_weight = ZERO
+    loafs % extra_weights = ZERO
+
+    ! populate the source banks from previous sites
+    call copy_sites_to_source()
 
     if (current_batch == n_inactive + 1) then
       ! Switch from inactive batch timer to active batch timer
@@ -129,17 +127,9 @@ contains
       call setup_active_usertallies()
     end if
 
+
   end subroutine initialize_batch
 
-!===============================================================================
-! INITIALIZE_GENERATION
-!===============================================================================
-
-  subroutine initialize_generation()
-
-    ! TODO
-
-  end subroutine initialize_generation
 
 !===============================================================================
 ! FINALIZE_BATCH handles synchronization and accumulation of tallies,
@@ -255,8 +245,7 @@ contains
     integer :: i
     
     n_bank = 0
-    
-    total_weight = ZERO
+    loafs % site_bank_idx = 0
     
     ! ==========================================================================
     ! LOOP OVER LOAFS BINS - TODO: parallelize this loop
@@ -268,7 +257,7 @@ contains
       ! RUN ALL PARTICLES IN BANK
       PARTICLE_LOOP: do i=loafs % site_bank_idx(loafs_active_bin), 1, -1
 
-        call loafs_bank_to_particle(loafs_active_bin, i)
+        call loafs_source_to_particle(loafs_active_bin, i)
         
         call transport()
         
@@ -276,75 +265,77 @@ contains
 
     end do LOAFS_BIN_LOOP
   
+    call distribute_extra_weight()
+  
   end subroutine mc_fixed_source
 
 !===============================================================================
 ! MC_FIXED_SOURCE_ORDER - not working yet
 !===============================================================================
 
-  subroutine mc_fixed_source_order()
-  
-    integer :: i(1), ilast(1)
-    integer :: bin
-    integer :: n_finished
-    
-    real(8), allocatable :: energies(:)
-    
-    ! ==========================================================================
-    ! LOOP OVER LOAFS BINS - TODO: parallelize this loop
-    LOAFS_BIN_LOOP: do bin = loafs % n_egroups, 1, -1
+!  subroutine mc_fixed_source_order()
+!  
+!    integer :: i(1), ilast(1)
+!    integer :: bin
+!    integer :: n_finished
+!    
+!    real(8), allocatable :: energies(:)
+!    
+!    ! ==========================================================================
+!    ! LOOP OVER LOAFS BINS - TODO: parallelize this loop
+!    LOAFS_BIN_LOOP: do bin = loafs % n_egroups, 1, -1
 
-      n_finished = 0
-      
-      ! TODO: replace the energy list and maxloc with something more efficient
-      allocate(energies(loafs % max_sites(bin)))
-      energies = loafs % site_banks(bin) % sites % E
+!      n_finished = 0
+!      
+!      ! TODO: replace the energy list and maxloc with something more efficient
+!      allocate(energies(loafs % max_sites(bin)))
+!      energies = loafs % site_banks(bin) % sites % E
 
-      ilast = maxloc(energies)
+!      ilast = maxloc(energies)
 
-      ! ========================================================================
-      ! RUN ALL PARTICLES IN BANK
-      PARTICLE_LOOP: do while (n_finished < loafs % max_sites(bin))
+!      ! ========================================================================
+!      ! RUN ALL PARTICLES IN BANK
+!      PARTICLE_LOOP: do while (n_finished < loafs % max_sites(bin))
 
-        i = maxloc(energies)
+!        i = maxloc(energies)
 
-        if (i(1) /= ilast(1)) then
-          call loafs_particle_to_bank(bin,ilast(1))
-          call loafs_bank_to_particle(bin, i(1))
-        end if
-        
-        call transport(one_collision=.true.)
-        
-!        write(*,*) p % event
-        
-        write(*,*) n_finished, i, energies(i(1)),p % E!, p % event
+!        if (i(1) /= ilast(1)) then
+!!          call loafs_particle_to_bank(bin,ilast(1))
+!!          call loafs_bank_to_particle(bin, i(1))
+!        end if
+!        
+!        !call transport(one_collision=.true.)
+!        
+!!        write(*,*) p % event
+!        
+!        write(*,*) n_finished, i, energies(i(1)),p % E!, p % event
 
-!        if (energies(i(1)) < p % E) then
-        if (p % E < 0.06025e-6_8) then
-          call transport()
-        end if
+!!        if (energies(i(1)) < p % E) then
+!        if (p % E < 0.06025e-6_8) then
+!          call transport()
+!        end if
 
-!        write(*,*) p % alive, p % last_material, p % event
+!!        write(*,*) p % alive, p % last_material, p % event
 
-        if (p % alive) then
-          energies(i(1)) = p % E
-        else
-          energies(i(1)) = 0.0_8
-          n_finished = n_finished + 1
-        end if
+!        if (p % alive) then
+!          energies(i(1)) = p % E
+!        else
+!          energies(i(1)) = 0.0_8
+!          n_finished = n_finished + 1
+!        end if
 
-        ilast(1) = i(1)
+!        ilast(1) = i(1)
 
-      end do PARTICLE_LOOP
+!      end do PARTICLE_LOOP
 
-      deallocate(energies)
+!      deallocate(energies)
 
-      stop
+!      stop
 
-    end do LOAFS_BIN_LOOP
-  
-    
-  end subroutine mc_fixed_source_order
+!    end do LOAFS_BIN_LOOP
+!  
+!    
+!  end subroutine mc_fixed_source_order
 
 !===============================================================================
 ! SAMPLE_SOURCE_PARTICLE

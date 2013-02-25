@@ -75,6 +75,8 @@ module loafs_header
     type(LoafsBank), allocatable  :: site_banks(:)
     integer, allocatable          :: site_bank_idx(:)
     
+    type(LoafsBank), allocatable  :: source_banks(:)
+    
     real(8)                       :: total_weight
     real(8),allocatable           :: extra_weights(:)
     

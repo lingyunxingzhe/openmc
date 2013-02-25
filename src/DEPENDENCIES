@@ -250,6 +250,7 @@ loafs_banks.o: constants.o
 loafs_banks.o: global.o
 loafs_banks.o: error.o
 loafs_banks.o: particle_header.o
+loafs_banks.o: random_lcg.o
 loafs_banks.o: search.o
 loafs_banks.o: string.o
 

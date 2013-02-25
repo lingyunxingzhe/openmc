@@ -30,9 +30,7 @@ contains
 ! TRANSPORT encompasses the main logic for moving a particle through geometry.
 !===============================================================================
 
-  subroutine transport(one_collision)
-
-    logical, optional, intent(in) :: one_collision ! flag to move p only once
+  subroutine transport()
 
     integer :: surface_crossed ! surface which particle is on
     integer :: lattice_crossed ! lattice boundary which particle crossed
@@ -42,7 +40,6 @@ contains
     real(8) :: d_collision     ! sampled distance to collision
     real(8) :: distance        ! distance particle travels
     logical :: found_cell      ! found cell which particle is in?
-    logical :: collide_once    ! flag for ending transport after one collision
     type(LocalCoord), pointer :: coord => null()
 
     ! Display message if high verbosity or trace is on
@@ -70,12 +67,6 @@ contains
 
     ! Initialize number of events to zero
     n_event = 0
-    
-    if (present(one_collision) .and. one_collision) then
-      collide_once = .true.
-    else
-      collide_once = .false.
-    end if
 
     ! Add paricle's starting weight to count for normalizing tallies later
     if (loafs_run) then
@@ -188,8 +179,6 @@ contains
           ! Advance coordinate level
           coord => coord % next
         end do
-        
-!        if (collide_once) exit
         
       end if
 
