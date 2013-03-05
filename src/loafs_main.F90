@@ -42,37 +42,19 @@ contains
     allocate(entropy(n_batches*gen_per_batch))
     entropy = ZERO
     
-    
     ! Allocate particle and source site
     allocate(p)
     allocate(source_site)
     
-    ! Display column titles
-    call print_columns()
-
-    ! Turn on inactive timer
+    ! fool the timers for now for we don't segfault
     call time_inactive % start()
-
-    write(*,*)'creating initial sites'
-    debug_wgt = 0.0_8
-    call mc_create_sites(.false.)
-    call reset_result(global_tallies)
-    n_realizations = 0
-    write(*,*)'done -- total weight: ',loafs % total_weight
-    write(*,*)debug_wgt(1:3)
-    write(*,*)
-    
-!    sum_ = 0.0
-!    do bin=1,loafs% n_egroups
-!      do i=1,loafs % max_sites(bin)
-!        if (loafs % site_banks(bin) % sites(i) % n_collision == 0) then
-!          sum_ = sum_ + loafs % site_banks(bin) % sites(i) % wgt
-!        end if
-!      end do
-!    end do
-!    write(*,*)sum_
-!    stop
-    
+    call time_inactive % stop()
+    call time_active % start()
+    call time_active % stop()
+    call time_transport % start()
+    call time_transport % stop()
+    call time_bank % start()
+    call time_bank % stop()
 
     ! ==========================================================================
     ! LOOP OVER BATCHES
@@ -80,94 +62,77 @@ contains
 
       call initialize_batch()
 
-      ! ====================================================================
-      ! RUN PARTICLES
-      
-      ! generate bin sites
-!        call time_transport % start()
-!        if (current_batch == 1) then
-!          call mc_create_sites(.false.)
-!        else
-!          call mc_create_sites(.true.)
-!        end if
-!        call time_transport % stop()
-      
-      ! sort by starting energy
-!        call sort_sites()
-      
-      
-      ! run bin sites
-      call time_transport % start()
-      debug = 0
-      debug2 = 0
-      debug_wgt = 0.0_8
-      call mc_fixed_source()
-!      write(*,*)total_weight
-      write(*,*)global_tallies(K_TRACKLENGTH) % value, total_weight, loafs % total_weight
-      write(*,*)debug
-!      write(*,*)debug2
-      write(*,*)debug_wgt(1:3)
-      write(*,*)debug_wgt(1:3)/dble(debug(1:3))
-      write(*,*)
-!      write(*,*)loafs % group_in_weights
-!      write(*,*)loafs % extra_weights
-!      write(*,*)
-      call time_transport % stop()
-      
-      ! Distribute fission bank across processors evenly
-      call time_bank % start()
-!        call synchronize_bank()
-      call time_bank % stop()
+      ! ==========================================================================
+      ! LOOP OVER LOAFS BINS - TODO: parallelize this loop
+      LOAFS_BIN_LOOP: do loafs_active_bin = loafs % n_egroups, 1, -1
 
-      ! Calculate shannon entropy
-!      if (entropy_on) call shannon_entropy() ! TODO
-      ! TODO: calculate it within each loafs bin as well as overall
+        ! ========================================================================
+        ! RUN ALL PARTICLES IN BANK
+        PARTICLE_LOOP: do i=loafs % source_bank_idx(loafs_active_bin), 1, -1
+
+          call loafs_source_to_particle(loafs_active_bin, i)
+          
+          loafs_last_bin = binary_search(loafs % egrid, loafs % n_egroups + 1, p % E) ! force the starting site to NOT be banked
+
+          call transport()
+          
+        end do PARTICLE_LOOP
+
+      end do LOAFS_BIN_LOOP
+
+
 
       call finalize_batch()
       
     end do BATCH_LOOP
 
-    call time_active % stop()
-
+    
+  
   
   end subroutine run_loafs
+
+
+
+
+
+
 
 
 !===============================================================================
 ! INITIALIZE_BATCH
 !===============================================================================
 
-  subroutine initialize_batch()
+!  subroutine initialize_batch()
 
-!    integer :: bin
+!!    integer :: bin
 
-    message = "Simulating batch " // trim(to_str(current_batch)) // "..."
-    call write_message(8)
+!    message = "Simulating batch " // trim(to_str(current_batch)) // "..."
+!    call write_message(8)
 
-    ! Reset total starting particle weight used for normalizing tallies
-    total_weight = ZERO
-    loafs % extra_weights = ZERO
-!    loafs % total_weight = ZERO
-    loafs % group_in_weights = ZERO
+!    ! Reset total starting particle weight used for normalizing tallies
+!    total_weight = ZERO
+!    loafs % extra_weights = ZERO
+!!    loafs % total_weight = ZERO
+!    loafs % group_in_weights = ZERO
 
-    ! populate the source banks from previous sites
-    call copy_sites_to_source()
+!    ! populate the source banks from previous sites
+!    call copy_sites_to_source()
 
-    if (current_batch == n_inactive + 1) then
-      ! Switch from inactive batch timer to active batch timer
-      call time_inactive % stop()
-      call time_active % start()
+!    if (current_batch == n_inactive + 1) then
+!      ! Switch from inactive batch timer to active batch timer
+!      call time_inactive % stop()
+!      call time_active % start()
 
-      ! Enable active batches (and tallies_on if it hasn't been enabled)
-      active_batches = .true.
-      tallies_on = .true.
+!      ! Enable active batches (and tallies_on if it hasn't been enabled)
+!      active_batches = .true.
+!      tallies_on = .true.
 
-      ! Add user tallies to active tallies list
-      call setup_active_usertallies()
-    end if
+!      ! Add user tallies to active tallies list
+!      call setup_active_usertallies()
+!    end if
 
 
-  end subroutine initialize_batch
+!  end subroutine initialize_batch
 
 
 !===============================================================================
@@ -176,26 +141,26 @@ contains
 ! turning on tallies when appropriate
 !===============================================================================
 
-  subroutine finalize_batch()
+!  subroutine finalize_batch()
 
-    ! Collect tallies
-    call time_tallies % start()
-    call synchronize_tallies()
-    call time_tallies % stop()
+!    ! Collect tallies
+!    call time_tallies % start()
+!    call synchronize_tallies()
+!    call time_tallies % stop()
 
-    ! Collect results and statistics
-    call calculate_keff()
+!    ! Collect results and statistics
+!    call calculate_keff()
 
-    ! Perform CMFD calculation if on
-!    if (cmfd_on) call execute_cmfd() ! TODO
+!    ! Perform CMFD calculation if on
+!!    if (cmfd_on) call execute_cmfd() ! TODO
 
-    ! Display output
-    if (master) call print_batch_keff()
-    
-!    write(*,*)total_weight, loafs % total_weight
-!    write(*,*)loafs % site_bank_idx
+!    ! Display output
+!    if (master) call print_batch_keff()
+!    
+!!    write(*,*)total_weight, loafs % total_weight
+!!    write(*,*)loafs % site_bank_idx
 
-  end subroutine finalize_batch
+!  end subroutine finalize_batch
 
 
 !===============================================================================
@@ -434,106 +399,215 @@ contains
 ! mean and standard deviation of the mean for active batches
 !===============================================================================
 
-  subroutine calculate_keff()
+!  subroutine calculate_keff()
 
-    real(8) :: temp(2) ! used to reduce sum and sum_sq
-    real(8) :: alpha   ! significance level for CI
-    real(8) :: t_value ! t-value for confidence intervals
+!    real(8) :: temp(2) ! used to reduce sum and sum_sq
+!    real(8) :: alpha   ! significance level for CI
+!    real(8) :: t_value ! t-value for confidence intervals
 
-    message = "Calculate batch keff..."
-    call write_message(8)
+!    message = "Calculate batch keff..."
+!    call write_message(8)
 
-    ! =========================================================================
-    ! SINGLE-BATCH ESTIMATE OF K-EFFECTIVE
+!    ! =========================================================================
+!    ! SINGLE-BATCH ESTIMATE OF K-EFFECTIVE
 
-#ifdef MPI
-    if (.not. reduce_tallies) then
-      ! Reduce value of k_batch if running in parallel
-      if (master) then
-        call MPI_REDUCE(MPI_IN_PLACE, k_batch(current_batch), 1, MPI_REAL8, &
-             MPI_SUM, 0, MPI_COMM_WORLD, mpi_err)
-      else
-        ! Receive buffer not significant at other processors
-        call MPI_REDUCE(k_batch(current_batch), temp, 1, MPI_REAL8, &
-             MPI_SUM, 0, MPI_COMM_WORLD, mpi_err)
-      end if
-    end if
-#endif
+!#ifdef MPI
+!    if (.not. reduce_tallies) then
+!      ! Reduce value of k_batch if running in parallel
+!      if (master) then
+!        call MPI_REDUCE(MPI_IN_PLACE, k_batch(current_batch), 1, MPI_REAL8, &
+!             MPI_SUM, 0, MPI_COMM_WORLD, mpi_err)
+!      else
+!        ! Receive buffer not significant at other processors
+!        call MPI_REDUCE(k_batch(current_batch), temp, 1, MPI_REAL8, &
+!             MPI_SUM, 0, MPI_COMM_WORLD, mpi_err)
+!      end if
+!    end if
+!#endif
 
-    ! Normalize single batch estimate of k
-    if (master) then
-      k_batch(current_batch) = k_batch(current_batch) / &
-!           (n_particles * gen_per_batch)
-!            loafs % total_weight
-            total_weight
-    end if
+!    ! Normalize single batch estimate of k
+!    if (master) then
+!      k_batch(current_batch) = k_batch(current_batch) / &
+!!           (n_particles * gen_per_batch)
+!!            loafs % total_weight
+!            total_weight
+!    end if
 
-    ! =========================================================================
-    ! ACCUMULATED K-EFFECTIVE AND ITS VARIANCE
+!    ! =========================================================================
+!    ! ACCUMULATED K-EFFECTIVE AND ITS VARIANCE
 
-    if (reduce_tallies) then
-      ! In this case, global_tallies has already been reduced, so we don't
-      ! need to perform any more reductions and just take the values from
-      ! global_tallies directly
+!    if (reduce_tallies) then
+!      ! In this case, global_tallies has already been reduced, so we don't
+!      ! need to perform any more reductions and just take the values from
+!      ! global_tallies directly
 
-      ! Sample mean of keff
-      keff = global_tallies(K_TRACKLENGTH) % sum / n_realizations
+!      ! Sample mean of keff
+!      keff = global_tallies(K_TRACKLENGTH) % sum / n_realizations
 
-      if (n_realizations > 1) then
-        if (confidence_intervals) then
-          ! Calculate t-value for confidence intervals
-          alpha = ONE - CONFIDENCE_LEVEL
-          t_value = t_percentile(ONE - alpha/TWO, n_realizations - 1)
-        else
-          t_value = ONE
-        end if
+!      if (n_realizations > 1) then
+!        if (confidence_intervals) then
+!          ! Calculate t-value for confidence intervals
+!          alpha = ONE - CONFIDENCE_LEVEL
+!          t_value = t_percentile(ONE - alpha/TWO, n_realizations - 1)
+!        else
+!          t_value = ONE
+!        end if
 
-        ! Standard deviation of the sample mean of k
-        keff_std = t_value * sqrt((global_tallies(K_TRACKLENGTH) % sum_sq / &
-             n_realizations - keff * keff) / (n_realizations - 1))
-      end if
-    else
-      ! In this case, no reduce was ever done on global_tallies. Thus, we need
-      ! to reduce the values in sum and sum^2 to get the sample mean and its
-      ! standard deviation
+!        ! Standard deviation of the sample mean of k
+!        keff_std = t_value * sqrt((global_tallies(K_TRACKLENGTH) % sum_sq / &
+!             n_realizations - keff * keff) / (n_realizations - 1))
+!      end if
+!    else
+!      ! In this case, no reduce was ever done on global_tallies. Thus, we need
+!      ! to reduce the values in sum and sum^2 to get the sample mean and its
+!      ! standard deviation
 
-#ifdef MPI
-      call MPI_REDUCE(global_tallies(K_TRACKLENGTH) % sum, temp, 2, &
-           MPI_REAL8, MPI_SUM, 0, MPI_COMM_WORLD, mpi_err)
-#else
-      temp(1) = global_tallies(K_TRACKLENGTH) % sum
-      temp(2) = global_tallies(K_TRACKLENGTH) % sum_sq
-#endif
+!#ifdef MPI
+!      call MPI_REDUCE(global_tallies(K_TRACKLENGTH) % sum, temp, 2, &
+!           MPI_REAL8, MPI_SUM, 0, MPI_COMM_WORLD, mpi_err)
+!#else
+!      temp(1) = global_tallies(K_TRACKLENGTH) % sum
+!      temp(2) = global_tallies(K_TRACKLENGTH) % sum_sq
+!#endif
 
-      ! Sample mean of k
-      keff = temp(1) / n_realizations
+!      ! Sample mean of k
+!      keff = temp(1) / n_realizations
 
-      if (n_realizations > 1) then
-        if (confidence_intervals) then
-          ! Calculate t-value for confidence intervals
-          alpha = ONE - CONFIDENCE_LEVEL
-          t_value = t_percentile(ONE - alpha/TWO, n_realizations - 1)
-        else
-          t_value = ONE
-        end if
+!      if (n_realizations > 1) then
+!        if (confidence_intervals) then
+!          ! Calculate t-value for confidence intervals
+!          alpha = ONE - CONFIDENCE_LEVEL
+!          t_value = t_percentile(ONE - alpha/TWO, n_realizations - 1)
+!        else
+!          t_value = ONE
+!        end if
 
-        ! Standard deviation of the sample mean of k
-        keff_std = t_value * sqrt((temp(2)/n_realizations - keff*keff) / &
-             (n_realizations - 1))
-      end if
-    end if
+!        ! Standard deviation of the sample mean of k
+!        keff_std = t_value * sqrt((temp(2)/n_realizations - keff*keff) / &
+!             (n_realizations - 1))
+!      end if
+!    end if
 
-#ifdef MPI
-    ! Broadcast new keff value to all processors
-    call MPI_BCAST(keff, 1, MPI_REAL8, 0, MPI_COMM_WORLD, mpi_err)
-#endif
+!#ifdef MPI
+!    ! Broadcast new keff value to all processors
+!    call MPI_BCAST(keff, 1, MPI_REAL8, 0, MPI_COMM_WORLD, mpi_err)
+!#endif
 
-    ! Reset global tally results
-    if (.not. active_batches) then
-      call reset_result(global_tallies)
-      n_realizations = 0
-    end if
+!    ! Reset global tally results
+!    if (.not. active_batches) then
+!      call reset_result(global_tallies)
+!      n_realizations = 0
+!    end if
 
-  end subroutine calculate_keff
+!  end subroutine calculate_keff
+
+
+
+!  subroutine run_loafs()
+!  
+!    integer :: i, bin
+!    real(8) :: sum_
+!  
+!    if (master) call header("LOAFS SIMULATION", level=1)
+!  
+!    ! these normally done in input_xml
+!    n_batches = 50
+!    n_inactive = 10
+!    n_active = n_batches - n_inactive
+!    current_gen = 1
+!    gen_per_batch = 1
+!    allocate(k_batch(n_batches))
+!    allocate(entropy(n_batches*gen_per_batch))
+!    entropy = ZERO
+!    
+!    
+!    ! Allocate particle and source site
+!    allocate(p)
+!    allocate(source_site)
+!    
+!    ! Display column titles
+!    call print_columns()
+
+!    ! Turn on inactive timer
+!    call time_inactive % start()
+
+!    write(*,*)'creating initial sites'
+!    debug_wgt = 0.0_8
+!    call mc_create_sites(.false.)
+!    call reset_result(global_tallies)
+!    n_realizations = 0
+!    write(*,*)'done -- total weight: ',loafs % total_weight
+!    write(*,*)debug_wgt(1:3)
+!    write(*,*)
+!    
+!!    sum_ = 0.0
+!!    do bin=1,loafs% n_egroups
+!!      do i=1,loafs % max_sites(bin)
+!!        if (loafs % site_banks(bin) % sites(i) % n_collision == 0) then
+!!          sum_ = sum_ + loafs % site_banks(bin) % sites(i) % wgt
+!!        end if
+!!      end do
+!!    end do
+!!    write(*,*)sum_
+!!    stop
+!    
+
+!    ! ==========================================================================
+!    ! LOOP OVER BATCHES
+!    BATCH_LOOP: do current_batch = 1, n_batches
+
+!      call initialize_batch()
+
+!      ! ====================================================================
+!      ! RUN PARTICLES
+!      
+!      ! generate bin sites
+!!        call time_transport % start()
+!!        if (current_batch == 1) then
+!!          call mc_create_sites(.false.)
+!!        else
+!!          call mc_create_sites(.true.)
+!!        end if
+!!        call time_transport % stop()
+!      
+!      ! sort by starting energy
+!!        call sort_sites()
+!      
+!      
+!      ! run bin sites
+!      call time_transport % start()
+!      debug = 0
+!      debug2 = 0
+!      debug_wgt = 0.0_8
+!      call mc_fixed_source()
+!!      write(*,*)total_weight
+!      write(*,*)global_tallies(K_TRACKLENGTH) % value, total_weight, loafs % total_weight
+!      write(*,*)debug
+!!      write(*,*)debug2
+!      write(*,*)debug_wgt(1:3)
+!      write(*,*)debug_wgt(1:3)/dble(debug(1:3))
+!      write(*,*)
+!!      write(*,*)loafs % group_in_weights
+!!      write(*,*)loafs % extra_weights
+!!      write(*,*)
+!      call time_transport % stop()
+!      
+!      ! Distribute fission bank across processors evenly
+!      call time_bank % start()
+!!        call synchronize_bank()
+!      call time_bank % stop()
+
+!      ! Calculate shannon entropy
+!!      if (entropy_on) call shannon_entropy() ! TODO
+!      ! TODO: calculate it within each loafs bin as well as overall
+
+!      call finalize_batch()
+!      
+!    end do BATCH_LOOP
+
+!    call time_active % stop()
+
+!  
+!  end subroutine run_loafs
 
 end module loafs_main
