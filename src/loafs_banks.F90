@@ -22,15 +22,18 @@ contains
     integer    :: alloc_err  ! allocation error code
 
     allocate(loafs % extra_weights(loafs % n_egroups), STAT=alloc_err)
+    allocate(loafs % group_in_weights(loafs % n_egroups), STAT=alloc_err)
 
     ! Allocate banks
     allocate(loafs % source_banks(loafs % n_egroups), STAT=alloc_err)
+    allocate(loafs % source_bank_idx(loafs % n_egroups), STAT=alloc_err)
     allocate(loafs % site_banks(loafs % n_egroups), STAT=alloc_err)
     allocate(loafs % site_bank_idx(loafs % n_egroups), STAT=alloc_err)
     do i=1,loafs % n_egroups
       allocate(loafs % site_banks(i) % sites(loafs % max_sites(i)), & 
                                                                  STAT=alloc_err)
       loafs % site_bank_idx(i) = 0
+      loafs % source_bank_idx(i) = 0
       
       ! Check for allocation errors 
       if (alloc_err /= 0) then
@@ -63,6 +66,7 @@ contains
   end subroutine allocate_loafs_banks
 
 
+
 !===============================================================================
 ! LOAFS_TRANSPORT_CHECK
 !===============================================================================
@@ -71,24 +75,21 @@ contains
   
     loafs_bin = binary_search(loafs % egrid, loafs % n_egroups + 1, p % E)
     
-    if (loafs_site_gen) then
-    
-      if (loafs_bin /= loafs_last_bin) then
-        if (loafs % site_bank_idx(loafs_bin) < loafs % max_sites(loafs_bin)) then
-          loafs % site_bank_idx(loafs_bin) = loafs % site_bank_idx(loafs_bin) + 1
-          call loafs_particle_to_bank(loafs_bin,loafs % site_bank_idx(loafs_bin))
-        else
-          loafs % extra_weights(loafs_bin) = loafs % extra_weights(loafs_bin) + p % wgt
-        end if
+    if (loafs_bin /= loafs_last_bin) then
+      if (loafs % site_bank_idx(loafs_bin) < loafs % max_sites(loafs_bin)) then
+        loafs % site_bank_idx(loafs_bin) = loafs % site_bank_idx(loafs_bin) + 1
+        call loafs_particle_to_bank(loafs_bin,loafs % site_bank_idx(loafs_bin))
+        loafs % group_in_weights(loafs_bin) = loafs % group_in_weights(loafs_bin) + p % wgt
+      else
+        loafs % extra_weights(loafs_bin) = loafs % extra_weights(loafs_bin) + p % wgt
       end if
-      
-      loafs_last_bin = loafs_bin
-      
-    else
-    
-      if (loafs_bin /= loafs_active_bin) p % alive = .false.
-      
     end if
+    
+    if (.not. loafs_site_gen) then
+      if (loafs_bin /= loafs_active_bin) p % alive = .false.
+    end if
+    
+    loafs_last_bin = loafs_bin
     
   end subroutine loafs_transport_check
 
@@ -137,8 +138,12 @@ contains
     
     real(8) :: real_weight
     real(8) :: extra_weight
+    real(8) :: unnorm_weight
     real(8) :: ratio
     
+!    unnorm_weight = 0.0
+
+    loafs % source_bank_idx = 0
     
     do bin = 1, loafs % n_egroups
       
@@ -157,7 +162,8 @@ contains
           real_weight = real_weight + &
                                  loafs % site_banks(bin) % sites(site_idx) % wgt
         else
-          ! sample a site from the banked sites and note the extra weight
+!          exit
+          ! sample a site from the banked sites and note the extra weight we're injecting
           site_idx = 0
           do while (site_idx == 0) 
             site_idx = prn()*loafs % max_sites(bin)
@@ -168,9 +174,13 @@ contains
       
         loafs % source_banks(bin) % sites(source_idx) = &
                                        loafs % site_banks(bin) % sites(site_idx) 
-      
+        loafs % source_bank_idx(bin) = source_idx
       end do 
       
+!      unnorm_weight = unnorm_weight + real_weight
+      
+      !write(*,*)bin,extra_weight,real_weight
+
       ! reduce the weights if we had extra weights
       if (extra_weight > 0.0_8) then
       
@@ -184,7 +194,15 @@ contains
     
     end do
   
-
+  
+    ! remormalize all weights to the starting weight - this is wrong
+!    ratio = loafs % total_weight / unnorm_weight
+!    do bin = 1, loafs % n_egroups
+!      do source_idx=1,loafs % max_sites(bin)
+!        loafs % source_banks(bin) % sites(source_idx) % wgt = &
+!                     loafs % source_banks(bin) % sites(source_idx) % wgt * ratio
+!      end do
+!    end do    
     
   end subroutine copy_sites_to_source
 
@@ -233,20 +251,19 @@ contains
   subroutine distribute_extra_weight()
 
     integer :: bin, i
-    real(8) :: sliver
+    real(8) :: ratio
     
-    ! TODO: add a bin-wise total weight counter to the loafs object to properly
-    ! re-weight with ratios instead of the additive stuff (incorrect when not
-    ! all particles have the same weight)
+    ! TODO: this needs to be done on a group-to-group basis
     
     do bin = 1, loafs % n_egroups
     
-      sliver = loafs % extra_weights(bin) / loafs % max_sites(bin)
-      
+      ratio = (loafs % group_in_weights(bin) + loafs % extra_weights(bin)) / &
+                                                   loafs % group_in_weights(bin)
+    
       do i = 1, loafs % max_sites(bin)
         
         loafs % site_banks(bin) % sites(i) % wgt = &
-                               loafs % site_banks(bin) % sites(i) % wgt + sliver
+                               loafs % site_banks(bin) % sites(i) % wgt * ratio
         
       end do
     

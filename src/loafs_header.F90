@@ -15,6 +15,10 @@ module loafs_header
 
     integer(8) :: id
 
+    integer    :: from_group ! index of loafs group this particle came from
+    integer    :: to_group   ! index of loafs group this particle is going to
+    logical    :: is_fission ! whether or not this is a fission or scatter site
+
     real(8)    :: wgt    ! weight of bank site
     real(8)    :: xyz(3) ! location of bank particle
     real(8)    :: uvw(3) ! diretional cosines
@@ -76,9 +80,12 @@ module loafs_header
     integer, allocatable          :: site_bank_idx(:)
     
     type(LoafsBank), allocatable  :: source_banks(:)
+    integer, allocatable          :: source_bank_idx(:)
     
     real(8)                       :: total_weight
     real(8),allocatable           :: extra_weights(:)
+    
+    real(8),allocatable           :: group_in_weights(:)
     
     integer                       :: fission_bank_size
     

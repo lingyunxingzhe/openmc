@@ -27,6 +27,9 @@ contains
 
   subroutine run_loafs()
   
+    integer :: i, bin
+    real(8) :: sum_
+  
     if (master) call header("LOAFS SIMULATION", level=1)
   
     ! these normally done in input_xml
@@ -50,8 +53,27 @@ contains
     ! Turn on inactive timer
     call time_inactive % start()
 
+    write(*,*)'creating initial sites'
+    debug_wgt = 0.0_8
     call mc_create_sites(.false.)
+    call reset_result(global_tallies)
+    n_realizations = 0
+    write(*,*)'done -- total weight: ',loafs % total_weight
+    write(*,*)debug_wgt(1:3)
+    write(*,*)
     
+!    sum_ = 0.0
+!    do bin=1,loafs% n_egroups
+!      do i=1,loafs % max_sites(bin)
+!        if (loafs % site_banks(bin) % sites(i) % n_collision == 0) then
+!          sum_ = sum_ + loafs % site_banks(bin) % sites(i) % wgt
+!        end if
+!      end do
+!    end do
+!    write(*,*)sum_
+!    stop
+    
+
     ! ==========================================================================
     ! LOOP OVER BATCHES
     BATCH_LOOP: do current_batch = 1, n_batches
@@ -73,9 +95,23 @@ contains
       ! sort by starting energy
 !        call sort_sites()
       
+      
       ! run bin sites
       call time_transport % start()
+      debug = 0
+      debug2 = 0
+      debug_wgt = 0.0_8
       call mc_fixed_source()
+!      write(*,*)total_weight
+      write(*,*)global_tallies(K_TRACKLENGTH) % value, total_weight, loafs % total_weight
+      write(*,*)debug
+!      write(*,*)debug2
+      write(*,*)debug_wgt(1:3)
+      write(*,*)debug_wgt(1:3)/dble(debug(1:3))
+      write(*,*)
+!      write(*,*)loafs % group_in_weights
+!      write(*,*)loafs % extra_weights
+!      write(*,*)
       call time_transport % stop()
       
       ! Distribute fission bank across processors evenly
@@ -84,10 +120,11 @@ contains
       call time_bank % stop()
 
       ! Calculate shannon entropy
-!        if (entropy_on) call shannon_entropy() ! TODO
+!      if (entropy_on) call shannon_entropy() ! TODO
+      ! TODO: calculate it within each loafs bin as well as overall
 
       call finalize_batch()
-
+      
     end do BATCH_LOOP
 
     call time_active % stop()
@@ -110,6 +147,8 @@ contains
     ! Reset total starting particle weight used for normalizing tallies
     total_weight = ZERO
     loafs % extra_weights = ZERO
+!    loafs % total_weight = ZERO
+    loafs % group_in_weights = ZERO
 
     ! populate the source banks from previous sites
     call copy_sites_to_source()
@@ -178,12 +217,14 @@ contains
     
     loafs % total_weight = ZERO
     loafs % extra_weights = ZERO
+    loafs % group_in_weights = ZERO
     
     loafs % site_bank_idx = 0
     
     ! ==========================================================================
     ! LOOP UNTIL ALL SITES GENERATED
     SITE_LOOP: do while (.not. all(loafs % site_bank_idx >= loafs % max_sites))
+!    SITE_LOOP: do while (.not. any(loafs % site_bank_idx >= loafs % max_sites))
     
       p % id = i
       
@@ -247,6 +288,11 @@ contains
     n_bank = 0
     loafs % site_bank_idx = 0
     
+!    loafs % total_weight = ZERO
+    loafs % extra_weights = ZERO
+    
+    total_weight = ZERO
+
     ! ==========================================================================
     ! LOOP OVER LOAFS BINS - TODO: parallelize this loop
     LOAFS_BIN_LOOP: do loafs_active_bin = loafs % n_egroups, 1, -1
@@ -255,16 +301,20 @@ contains
 
       ! ========================================================================
       ! RUN ALL PARTICLES IN BANK
-      PARTICLE_LOOP: do i=loafs % site_bank_idx(loafs_active_bin), 1, -1
+      PARTICLE_LOOP: do i=loafs % source_bank_idx(loafs_active_bin), 1, -1
 
         call loafs_source_to_particle(loafs_active_bin, i)
         
+!        loafs % total_weight = loafs % total_weight + p % wgt
+
+        loafs_last_bin = binary_search(loafs % egrid, loafs % n_egroups + 1, p % E) ! force the starting site to NOT be banked
+
         call transport()
         
       end do PARTICLE_LOOP
 
     end do LOAFS_BIN_LOOP
-  
+
     call distribute_extra_weight()
   
   end subroutine mc_fixed_source

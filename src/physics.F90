@@ -72,6 +72,7 @@ contains
     if (loafs_run) then
       if (p % n_collision == 0) then
         total_weight = total_weight + p % wgt
+        debug2 = debug2 + 1
       end if
     else
       total_weight = total_weight + p % wgt
@@ -115,15 +116,17 @@ contains
       end do
 
       ! Score track-length tallies
-      if (.not. loafs_site_gen .and. active_tracklength_tallies % size() > 0) &
+      if (active_tracklength_tallies % size() > 0) &
            call score_tracklength_tally(distance)
 
       ! Score track-length estimate of k-eff
-      if (.not. loafs_site_gen) then
+!      if (.not. loafs_site_gen) then
         global_tallies(K_TRACKLENGTH) % value = &
              global_tallies(K_TRACKLENGTH) % value + p % wgt * distance * &
              material_xs % nu_fission
-      end if
+        if (loafs_run) debug(loafs_bin) = debug(loafs_bin) + 1
+        if (loafs_run) debug_wgt(loafs_bin) = debug_wgt(loafs_bin) + p % wgt
+!      end if
       
       if (d_collision > d_boundary) then
         ! ====================================================================
@@ -147,11 +150,11 @@ contains
         ! PARTICLE HAS COLLISION
 
         ! Score collision estimate of keff
-        if (.not. loafs_site_gen) then
+!        if (.not. loafs_site_gen) then
           global_tallies(K_COLLISION) % value = &
                global_tallies(K_COLLISION) % value + p % wgt * &
                material_xs % nu_fission / material_xs % total
-        end if
+!        end if
         
         p % surface = NONE
         call collision()
@@ -213,7 +216,7 @@ contains
     ! since the direction of the particle will change and we need to use the
     ! pre-collision direction to figure out what mesh surfaces were crossed
 
-    if (.not. loafs_site_gen .and. active_current_tallies % size() > 0) &
+    if (active_current_tallies % size() > 0) &
       call score_surface_current()
 
     ! Sample nuclide/reaction for the material the particle is in
@@ -238,7 +241,7 @@ contains
     ! occurred rather than before because we need information on the outgoing
     ! energy for any tallies with an outgoing energy filter
 
-    if (.not. loafs_site_gen .and. active_analog_tallies % size() > 0) &
+    if (active_analog_tallies % size() > 0) &
       call score_analog_tally()
 
     ! Reset banked weight during collision
@@ -319,11 +322,11 @@ contains
 
       ! Score implicit absorption estimate of keff. Unlike the analog absorption
       ! estimate, this only needs to be scored to in one place.
-      if (.not. loafs_site_gen) then
+!      if (.not. loafs_site_gen) then
         global_tallies(K_ABSORPTION) % value = &
              global_tallies(K_ABSORPTION) % value + p % absorb_wgt * &
              material_xs % nu_fission / material_xs % absorption
-      end if
+!      end if
       
     else
       ! set cutoff variable for analog cases
@@ -340,11 +343,11 @@ contains
         ! Score absorption estimate of keff. Note that this appears in three
         ! places -- absorption reactions, total fission reactions, and
         ! first/second/etc chance fission reactions
-        if (.not. loafs_site_gen) then
+!        if (.not. loafs_site_gen) then
           global_tallies(K_ABSORPTION) % value = &
                global_tallies(K_ABSORPTION) % value + p % wgt * &
                material_xs % nu_fission / material_xs % absorption
-        end if
+!        end if
         
         p % alive = .false.
         p % event = EVENT_ABSORB
@@ -386,11 +389,11 @@ contains
             ! Score absorption estimate of keff. Note that this appears in three
             ! places -- absorption reactions, total fission reactions, and
             ! first/second/etc chance fission reactions
-            if (.not. loafs_site_gen) then
+!            if (.not. loafs_site_gen) then
               global_tallies(K_ABSORPTION) % value = &
                    global_tallies(K_ABSORPTION) % value + p % wgt * &
                    material_xs % nu_fission / material_xs % absorption
-            end if
+!            end if
             
             p % alive = .false.
             p % event = EVENT_FISSION
@@ -430,11 +433,11 @@ contains
               ! Score absorption estimate of keff. Note that this appears in
               ! three places -- absorption reactions, total fission reactions,
               ! and first/second/etc chance fission reactions
-              if (.not. loafs_site_gen) then
+!              if (.not. loafs_site_gen) then
                 global_tallies(K_ABSORPTION) % value = &
                      global_tallies(K_ABSORPTION) % value + p % wgt * &
                      material_xs % nu_fission / material_xs % absorption
-              end if
+!              end if
               
               ! With no survival biasing, the particle is absorbed and so
               ! its life is over
@@ -890,6 +893,8 @@ contains
     integer, intent(in)     :: i_nuclide
     type(Reaction), pointer :: rxn
 
+    integer :: k
+
     integer :: i            ! loop index
     integer :: j            ! index on nu energy grid / precursor group
     integer :: lc           ! index before start of energies/nu values
@@ -1068,7 +1073,7 @@ contains
       end if
 
 
-      if (.not. loafs_site_gen) then
+!      if (.not. loafs_site_gen) then
       
         ! Bank source neutrons by copying particle data
         fission_bank(i) % xyz = p % coord0 % xyz
@@ -1085,14 +1090,35 @@ contains
         ! set energy of fission neutron
         fission_bank(i) % E = E_out
         
+!      end if
+
+      if (loafs_run .and. .not. loafs_site_gen) then
+        
+        loafs_bin = binary_search(loafs % egrid, loafs % n_egroups + 1, E_out)
+    
+        if (loafs % site_bank_idx(loafs_bin) < loafs % max_sites(loafs_bin)) then
+          loafs % site_bank_idx(loafs_bin) = loafs % site_bank_idx(loafs_bin) + 1
+          
+          k = loafs % site_bank_idx(loafs_bin)
+          
+          loafs % site_banks(loafs_bin) % sites(k) % wgt = fission_bank(i) % wgt
+          loafs % site_banks(loafs_bin) % sites(k) % xyz = fission_bank(i) % xyz
+          loafs % site_banks(loafs_bin) % sites(k) % uvw = fission_bank(i) % uvw
+          loafs % site_banks(loafs_bin) % sites(k) % E = fission_bank(i) % E
+          
+          loafs % group_in_weights(loafs_bin) = loafs % group_in_weights(loafs_bin) + fission_bank(i) % wgt
+        else
+          loafs % extra_weights(loafs_bin) = loafs % extra_weights(loafs_bin) + fission_bank(i) % wgt
+        end if
+        
       end if
       
     end do
 
     ! increment number of bank sites
-    if (.not. loafs_site_gen) then
+!    if (.not. loafs_site_gen) then
       n_bank = min(n_bank + nu, maxbank)
-    end if
+!    end if
     
     ! Store total weight banked for analog fission tallies
     p % n_bank   = nu

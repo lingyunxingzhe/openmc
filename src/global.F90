@@ -382,6 +382,10 @@ module global
   integer :: loafs_active_bin ! index of currently running loafs bin
   
   logical :: loafs_site_gen = .false.
+  
+  integer :: debug(4)
+  real(8) :: debug_wgt(4)
+  integer :: debug2
 
 contains
 

@@ -17,10 +17,10 @@ include OBJECTS
 #===============================================================================
 
 COMPILER = intel
-DEBUG    = no
+DEBUG    = yes
 PROFILE  = no
 OPTIMIZE = yes
-MPI      = no
+MPI      = yes
 HDF5     = yes
 PETSC    = no
 
