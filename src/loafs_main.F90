@@ -1,6 +1,7 @@
 module loafs_main
 
   use bank_header
+  use cmfd_execute, only: cmfd_init_batch, execute_cmfd
   use global
   use loafs_banks,  only: loafs_source_to_particle, loafs_particle_to_bank, &
                           distribute_extra_weight, copy_sites_to_source
@@ -27,14 +28,13 @@ contains
 
   subroutine run_loafs()
   
-    integer :: i, bin
-    real(8) :: sum_
+    integer :: i
   
     if (master) call header("LOAFS SIMULATION", level=1)
   
     ! these normally done in input_xml
-    n_batches = 50
-    n_inactive = 10
+    n_batches = 10
+    n_inactive = 2
     n_active = n_batches - n_inactive
     current_gen = 1
     gen_per_batch = 1
@@ -46,15 +46,12 @@ contains
     allocate(p)
     allocate(source_site)
     
-    ! fool the timers for now for we don't segfault
+    ! fool the timers for now so we don't segfault
     call time_inactive % start()
-    call time_inactive % stop()
     call time_active % start()
-    call time_active % stop()
     call time_transport % start()
-    call time_transport % stop()
     call time_bank % start()
-    call time_bank % stop()
+    
 
     ! ==========================================================================
     ! LOOP OVER BATCHES
@@ -66,74 +63,124 @@ contains
       ! LOOP OVER LOAFS BINS - TODO: parallelize this loop
       LOAFS_BIN_LOOP: do loafs_active_bin = loafs % n_egroups, 1, -1
 
+!        call initialize_bin()
+
+        total_weight = ZERO
+
         ! ========================================================================
         ! RUN ALL PARTICLES IN BANK
         PARTICLE_LOOP: do i=loafs % source_bank_idx(loafs_active_bin), 1, -1
 
           call loafs_source_to_particle(loafs_active_bin, i)
-          
-          loafs_last_bin = binary_search(loafs % egrid, loafs % n_egroups + 1, p % E) ! force the starting site to NOT be banked
 
           call transport()
           
         end do PARTICLE_LOOP
 
+        loafs % total_weights(loafs_active_bin) = total_weight
+
+!        call finalize_bin()
+
       end do LOAFS_BIN_LOOP
-
-
 
       call finalize_batch()
       
     end do BATCH_LOOP
 
+    call time_inactive % stop()
+    call time_active % stop()
+    call time_transport % stop()
+    call time_bank % stop()
     
-  
-  
   end subroutine run_loafs
-
-
-
-
-
-
-
 
 !===============================================================================
 ! INITIALIZE_BATCH
 !===============================================================================
 
-!  subroutine initialize_batch()
+  subroutine initialize_batch()
 
-!!    integer :: bin
+    message = "Simulating batch " // trim(to_str(current_batch)) // "..."
+    call write_message(8)
 
-!    message = "Simulating batch " // trim(to_str(current_batch)) // "..."
-!    call write_message(8)
+    call initialize_source()
+    
+    call cmfd_init_batch()
+    
+    loafs % site_bank_idx = 0     ! clear loafs site banks
+    loafs % total_weights = ZERO
 
-!    ! Reset total starting particle weight used for normalizing tallies
-!    total_weight = ZERO
-!    loafs % extra_weights = ZERO
-!!    loafs % total_weight = ZERO
-!    loafs % group_in_weights = ZERO
+    if (current_batch == n_inactive + 1) then
+      ! Switch from inactive batch timer to active batch timer
+      call time_inactive % stop()
+      call time_active % start()
 
-!    ! populate the source banks from previous sites
-!    call copy_sites_to_source()
+      ! Enable active batches (and tallies_on if it hasn't been enabled)
+      active_batches = .true.
+      tallies_on = .true.
 
-!    if (current_batch == n_inactive + 1) then
-!      ! Switch from inactive batch timer to active batch timer
-!      call time_inactive % stop()
-!      call time_active % start()
-
-!      ! Enable active batches (and tallies_on if it hasn't been enabled)
-!      active_batches = .true.
-!      tallies_on = .true.
-
-!      ! Add user tallies to active tallies list
-!      call setup_active_usertallies()
-!    end if
+      ! Add user tallies to active tallies list
+      call setup_active_usertallies()
+    end if
 
 
-!  end subroutine initialize_batch
+  end subroutine initialize_batch
 
+
+!===============================================================================
+! INITIALIZE_BIN
+!===============================================================================
+
+!  subroutine initialize_bin()
+!    
+!  end subroutine initialize_bin
+
+!===============================================================================
+! FINALIZE_BIN
+!===============================================================================
+
+!  subroutine finalize_bin()
+!    
+!  end subroutine finalize_bin
+
+!===============================================================================
+! INITIALIZE_SOURCE
+!===============================================================================
+
+  subroutine initialize_source()
+
+    integer :: i, bin
+
+    if (current_batch == 1) then ! sample random starting particles within bin
+    
+      do bin = 1,loafs % n_egroups
+        do i = 1,loafs % max_sites(bin)
+        
+          ! sample xyz
+          call sample_external_source(source_site)
+        
+          ! override starting energy
+          source_site % E = loafs % egrid(bin) + &
+                                 prn()*(loafs % egrid(bin+1)-loafs % egrid(bin))
+          
+          ! insert particle in source bank
+          call initialize_particle()
+          call copy_source_attributes(source_site)
+          call loafs_particle_to_bank(bin,i)
+          loafs % source_banks(bin) % sites(i) = &
+                                              loafs % site_banks(bin) % sites(i)
+          
+        end do
+        loafs % source_bank_idx(bin) = loafs % max_sites(bin)
+      end do
+    
+    else
+    
+      call copy_sites_to_source()
+    
+    end if
+
+  end subroutine initialize_source
 
 !===============================================================================
 ! FINALIZE_BATCH handles synchronization and accumulation of tallies,
@@ -141,148 +188,186 @@ contains
 ! turning on tallies when appropriate
 !===============================================================================
 
-!  subroutine finalize_batch()
+  subroutine finalize_batch()
 
-!    ! Collect tallies
-!    call time_tallies % start()
-!    call synchronize_tallies()
-!    call time_tallies % stop()
+    integer :: i, j
+    integer :: loafs_bin, filter_bin
+    real(8) :: ratio
+    
+    type(TallyObject),    pointer :: t => null() ! pointer for tally object
 
-!    ! Collect results and statistics
-!    call calculate_keff()
+    ! Collect tallies
+    call time_tallies % start()
+    call synchronize_tallies()
+    call time_tallies % stop()
 
-!    ! Perform CMFD calculation if on
-!!    if (cmfd_on) call execute_cmfd() ! TODO
-
-!    ! Display output
-!    if (master) call print_batch_keff()
+    ! Since each loafs bin was run with different # of particles, each one had
+    ! different total starting weights.  We need to renormalize the tallies to
+    ! these weights
+    
+!    do i = 1, n_cmfd_tallies
+!      t => cmfd_tallies(i)
+!      write(*,*)t % n_score_bins,t % n_filters
+!      write(*,*)
+!      write(*,*)t % find_filter(FILTER_MESH),t % find_filter(FILTER_ENERGYIN)
+!      write(*,*)
+!      write(*,*)t % stride
+!      write(*,*)
+!      write(*,*)size(t % results, 1),size(t % results, 2),size(t % results)
+!      write(*,*)
+!      write(*,*)t % results
+!      write(*,*)
+!      t % matching_bins = 1
+!      do filter_bin = 1, size(t % results)
 !    
-!!    write(*,*)total_weight, loafs % total_weight
-!!    write(*,*)loafs % site_bank_idx
+!!        loafs_bin = get_loafs_bin_from_filter_bin(t, filter_bin)
+!        loafs_bin = 1
+!        
+!        
+!        write(*,*)filter_bin, "->",t % matching_bins            
+!!        ratio = total_weight / loafs % total_weights(loafs_bin)
+!!        t % results(:,filter_bin) % sum = t % results(:,filter_bin) % sum * &
+!!                                          ratio
+!!        ratio = ratio*ratio
+!!        t % results(:,filter_bin) % sum_sq = t % results(:,filter_bin) % sum_sq * &
+!!                                             ratio
+!      end do
+!      stop
+!    end do
+    
+    
 
-!  end subroutine finalize_batch
+    !filter_bin = sum((t % matching_bins - 1) * t%stride) + 1
+
+    call execute_cmfd()
+
+    write(*,*) current_batch, cmfd % keff
+    write(*,*) cmfd % totalxs
+
+
+  end subroutine finalize_batch
 
 
 !===============================================================================
 ! CREATE_SITES
 !===============================================================================
 
-  subroutine mc_create_sites(from_fission_bank)
-  
-    logical, intent(in) :: from_fission_bank
-  
-    integer :: i
-  
-    i = 0
-  
-    ! set work arbitratily high so the site generation loop can run freely
-    work = huge(0)
-    
-    loafs_site_gen = .true.
-    
-    loafs % total_weight = ZERO
-    loafs % extra_weights = ZERO
-    loafs % group_in_weights = ZERO
-    
-    loafs % site_bank_idx = 0
-    
-    ! ==========================================================================
-    ! LOOP UNTIL ALL SITES GENERATED
-    SITE_LOOP: do while (.not. all(loafs % site_bank_idx >= loafs % max_sites))
-!    SITE_LOOP: do while (.not. any(loafs % site_bank_idx >= loafs % max_sites))
-    
-      p % id = i
-      
-      ! set random number seed
-      call set_particle_seed(p % id)
+!  subroutine mc_create_sites(from_fission_bank)
+!  
+!    logical, intent(in) :: from_fission_bank
+!  
+!    integer :: i
+!  
+!    i = 0
+!  
+!    ! set work arbitratily high so the site generation loop can run freely
+!    work = huge(0)
+!    
+!    loafs_site_gen = .true.
+!    
+!    loafs % total_weight = ZERO
+!    loafs % extra_weights = ZERO
+!    loafs % group_in_weights = ZERO
+!    
+!    loafs % site_bank_idx = 0
+!    
+!    ! ==========================================================================
+!    ! LOOP UNTIL ALL SITES GENERATED
+!    SITE_LOOP: do while (.not. all(loafs % site_bank_idx >= loafs % max_sites))
+!!    SITE_LOOP: do while (.not. any(loafs % site_bank_idx >= loafs % max_sites))
+!    
+!      p % id = i
+!      
+!      ! set random number seed
+!      call set_particle_seed(p % id)
 
-      ! get new source particle
-      if (from_fission_bank) then
-        call sample_from_fission_bank()
-      else
-        call sample_source_particle()
-      end if
+!      ! get new source particle
+!      if (from_fission_bank) then
+!        call sample_from_fission_bank()
+!      else
+!        call sample_source_particle()
+!      end if
 
-      ! accumulate total starting weight of particles
-      loafs % total_weight = loafs % total_weight + p % wgt
+!      ! accumulate total starting weight of particles
+!      loafs % total_weight = loafs % total_weight + p % wgt
 
-      ! transport particle
-      loafs_last_bin = -1 ! force the starting site to be banked
-      call transport()
+!      ! transport particle
+!      loafs_last_bin = -1 ! force the starting site to be banked
+!      call transport()
 
-!      write(*,*)p%id,loafs % site_bank_idx
+!!      write(*,*)p%id,loafs % site_bank_idx
 
-      i = i + 1
+!      i = i + 1
 
-    end do SITE_LOOP
-    
-    loafs_site_gen = .false.
+!    end do SITE_LOOP
+!    
+!    loafs_site_gen = .false.
 
-    call distribute_extra_weight()
-    
-  end subroutine mc_create_sites
+!    call distribute_extra_weight()
+!    
+!  end subroutine mc_create_sites
 
 !===============================================================================
 ! SORT_SITES
 !===============================================================================
 
-  subroutine sort_sites()
-  
-    integer :: bin
-    
-    ! ==========================================================================
-    ! LOOP OVER LOAFS BINS - TODO: parallelize this loop
-    LOAFS_BIN_LOOP: do bin = 1, loafs % n_egroups
+!  subroutine sort_sites()
+!  
+!    integer :: bin
+!    
+!    ! ==========================================================================
+!    ! LOOP OVER LOAFS BINS - TODO: parallelize this loop
+!    LOAFS_BIN_LOOP: do bin = 1, loafs % n_egroups
 
-      call heap_sort(loafs % site_banks(bin) % sites, loafs % site_bank_idx(bin))
+!      call heap_sort(loafs % site_banks(bin) % sites, loafs % site_bank_idx(bin))
 
-    end do LOAFS_BIN_LOOP
+!    end do LOAFS_BIN_LOOP
 
-    
-  end subroutine sort_sites
+!    
+!  end subroutine sort_sites
 
 
 !===============================================================================
 ! MC_FIXED_SOURCE
 !===============================================================================
 
-  subroutine mc_fixed_source()
-    
-    integer :: i
-    
-    n_bank = 0
-    loafs % site_bank_idx = 0
-    
-!    loafs % total_weight = ZERO
-    loafs % extra_weights = ZERO
-    
-    total_weight = ZERO
+!  subroutine mc_fixed_source()
+!    
+!    integer :: i
+!    
+!    n_bank = 0
+!    loafs % site_bank_idx = 0
+!    
+!!    loafs % total_weight = ZERO
+!    loafs % extra_weights = ZERO
+!    
+!    total_weight = ZERO
 
-    ! ==========================================================================
-    ! LOOP OVER LOAFS BINS - TODO: parallelize this loop
-    LOAFS_BIN_LOOP: do loafs_active_bin = loafs % n_egroups, 1, -1
+!    ! ==========================================================================
+!    ! LOOP OVER LOAFS BINS - TODO: parallelize this loop
+!    LOAFS_BIN_LOOP: do loafs_active_bin = loafs % n_egroups, 1, -1
 
-!      write(*,*) loafs_active_bin
+!!      write(*,*) loafs_active_bin
 
-      ! ========================================================================
-      ! RUN ALL PARTICLES IN BANK
-      PARTICLE_LOOP: do i=loafs % source_bank_idx(loafs_active_bin), 1, -1
+!      ! ========================================================================
+!      ! RUN ALL PARTICLES IN BANK
+!      PARTICLE_LOOP: do i=loafs % source_bank_idx(loafs_active_bin), 1, -1
 
-        call loafs_source_to_particle(loafs_active_bin, i)
-        
-!        loafs % total_weight = loafs % total_weight + p % wgt
+!        call loafs_source_to_particle(loafs_active_bin, i)
+!        
+!!        loafs % total_weight = loafs % total_weight + p % wgt
 
-        loafs_last_bin = binary_search(loafs % egrid, loafs % n_egroups + 1, p % E) ! force the starting site to NOT be banked
+!        loafs_last_bin = binary_search(loafs % egrid, loafs % n_egroups + 1, p % E) ! force the starting site to NOT be banked
 
-        call transport()
-        
-      end do PARTICLE_LOOP
+!        call transport()
+!        
+!      end do PARTICLE_LOOP
 
-    end do LOAFS_BIN_LOOP
+!    end do LOAFS_BIN_LOOP
 
-    call distribute_extra_weight()
-  
-  end subroutine mc_fixed_source
+!    call distribute_extra_weight()
+!  
+!  end subroutine mc_fixed_source
 
 !===============================================================================
 ! MC_FIXED_SOURCE_ORDER - not working yet
@@ -356,42 +441,42 @@ contains
 ! SAMPLE_SOURCE_PARTICLE
 !===============================================================================
 
-  subroutine sample_source_particle()
+!  subroutine sample_source_particle()
 
-    ! Set particle
-    call initialize_particle()
+!    ! Set particle
+!    call initialize_particle()
 
-    ! Sample the external source distribution
-    call sample_external_source(source_site)
+!    ! Sample the external source distribution
+!    call sample_external_source(source_site)
 
-    ! Copy source attributes to the particle
-    call copy_source_attributes(source_site)
+!    ! Copy source attributes to the particle
+!    call copy_source_attributes(source_site)
 
-  end subroutine sample_source_particle
+!  end subroutine sample_source_particle
   
 
 !===============================================================================
 ! SAMPLE_FROM_FISSION_BANK
 !===============================================================================
 
-  subroutine sample_from_fission_bank()
+!  subroutine sample_from_fission_bank()
 
-    integer :: i
+!    integer :: i
 
-    ! Set particle
-    call initialize_particle()
+!    ! Set particle
+!    call initialize_particle()
 
-    i = int(prn()*dble(n_bank))
-    do while (i == 0)
-      i = int(prn()*dble(n_bank))
-    end do
+!    i = int(prn()*dble(n_bank))
+!    do while (i == 0)
+!      i = int(prn()*dble(n_bank))
+!    end do
 
-    source_site => fission_bank(i)
+!    source_site => fission_bank(i)
 
-    ! Copy source attributes to the particle
-    call copy_source_attributes(source_site)
+!    ! Copy source attributes to the particle
+!    call copy_source_attributes(source_site)
 
-  end subroutine sample_from_fission_bank
+!  end subroutine sample_from_fission_bank
 
 
 !===============================================================================

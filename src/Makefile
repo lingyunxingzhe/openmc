@@ -22,7 +22,7 @@ PROFILE  = no
 OPTIMIZE = yes
 MPI      = yes
 HDF5     = yes
-PETSC    = no
+PETSC    = yes
 
 #===============================================================================
 # External Library Paths

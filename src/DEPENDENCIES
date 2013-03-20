@@ -234,6 +234,7 @@ interpolation.o: search.o
 interpolation.o: string.o
 
 loafs_main.o: bank_header.o
+loafs_main.o: cmfd_execute.o
 loafs_main.o: global.o
 loafs_main.o: loafs_banks.o
 loafs_main.o: math.o
@@ -253,6 +254,7 @@ loafs_banks.o: particle_header.o
 loafs_banks.o: random_lcg.o
 loafs_banks.o: search.o
 loafs_banks.o: string.o
+loafs_banks.o: tally_header.o
 
 loafs_input.o: templates/loafs_t.o
 loafs_input.o: error.o
@@ -367,6 +369,7 @@ tally.o: ace_header.o
 tally.o: constants.o
 tally.o: error.o
 tally.o: global.o
+tally.o: loafs_banks.o
 tally.o: math.o
 tally.o: mesh.o
 tally.o: mesh_header.o

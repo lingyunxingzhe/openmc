@@ -82,7 +82,7 @@ module loafs_header
     type(LoafsBank), allocatable  :: source_banks(:)
     integer, allocatable          :: source_bank_idx(:)
     
-    real(8)                       :: total_weight
+    real(8),allocatable           :: total_weights(:)
     real(8),allocatable           :: extra_weights(:)
     
     real(8),allocatable           :: group_in_weights(:)

@@ -7,10 +7,35 @@ module loafs_banks
   use random_lcg,       only: prn
   use search,           only: binary_search
   use string,           only: to_str
+  use tally_header,     only: TallyObject
 
   implicit none
 
 contains
+
+!===============================================================================
+! LOAFSBIN_FROM_MATCHINGBINS
+!===============================================================================
+
+  function loafsbin_from_matchingbins(t) result(loafs_bin)
+    
+    type(TallyObject), intent(in) :: t
+    
+    integer             :: i
+    integer             :: loafs_bin
+    
+    i = t % find_filter(FILTER_ENERGYIN)
+    
+    if (i /= 0) then
+      loafs_bin = t % matching_bins(i)
+    else
+      loafs_bin = 1
+    end if
+    
+    ! TODO: spatial bins
+    
+  end function loafsbin_from_matchingbins
+
 
 !===============================================================================
 ! ALLOCATE_LOAFS_BANKS
@@ -21,6 +46,7 @@ contains
     integer    :: i
     integer    :: alloc_err  ! allocation error code
 
+    allocate(loafs % total_weights(loafs % n_egroups), STAT=alloc_err)
     allocate(loafs % extra_weights(loafs % n_egroups), STAT=alloc_err)
     allocate(loafs % group_in_weights(loafs % n_egroups), STAT=alloc_err)
 
@@ -138,7 +164,7 @@ contains
     
     real(8) :: real_weight
     real(8) :: extra_weight
-    real(8) :: unnorm_weight
+!    real(8) :: unnorm_weight
     real(8) :: ratio
     
 !    unnorm_weight = 0.0
@@ -241,6 +267,9 @@ contains
     p % n_collision = loafs % source_banks(bin) % sites(i) % n_collision
 
     p % alive = .true.
+    
+    ! force the starting site to NOT be banked
+    loafs_last_bin = binary_search(loafs % egrid, loafs % n_egroups + 1, p % E)
     
   end subroutine loafs_source_to_particle
 
