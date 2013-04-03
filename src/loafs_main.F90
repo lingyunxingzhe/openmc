@@ -33,7 +33,7 @@ contains
     if (master) call header("LOAFS SIMULATION", level=1)
   
     ! these normally done in input_xml
-    n_batches = 10
+    n_batches = 50
     n_inactive = 2
     n_active = n_batches - n_inactive
     current_gen = 1
@@ -200,7 +200,20 @@ contains
     call execute_cmfd()
 
     write(*,*) current_batch, cmfd % keff
-    write(*,*) cmfd % totalxs
+    write(*,*) cmfd % totalxs ! not
+    write(*,*)
+    write(*,*) cmfd % p1scattxs! not
+    write(*,*)
+    write(*,*) cmfd % scattxs ! not
+    write(*,*)
+    write(*,*) cmfd % nfissxs ! maybe
+    write(*,*)
+    write(*,*) cmfd % diffcof ! not
+    write(*,*)
+    write(*,*) cmfd % current ! maybe
+    write(*,*)
+    write(*,*) cmfd % flux ! maybe
+
 
 
   end subroutine finalize_batch
