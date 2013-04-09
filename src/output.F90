@@ -45,7 +45,9 @@ contains
 
     ! Write version information
     write(UNIT=OUTPUT_UNIT, FMT=*) &
-         '     Developed At:  Massachusetts Institute of Technology'
+         '     Copyright:     2011-2013 Massachusetts Institute of Technology'
+    write(UNIT=OUTPUT_UNIT, FMT=*) &
+         '     License:       http://mit-crpg.github.io/openmc/license.html'
     write(UNIT=OUTPUT_UNIT, FMT='(6X,"Version:",7X,I1,".",I1,".",I1)') &
          VERSION_MAJOR, VERSION_MINOR, VERSION_RELEASE
 #ifdef GIT_SHA1
@@ -145,10 +147,10 @@ contains
     if (master) then
       write(UNIT=OUTPUT_UNIT, FMT='(1X,A,1X,I1,".",I1,".",I1)') &
            "OpenMC version", VERSION_MAJOR, VERSION_MINOR, VERSION_RELEASE
-      write(UNIT=OUTPUT_UNIT, FMT=*) "Copyright (c) 2011-2012 &
+      write(UNIT=OUTPUT_UNIT, FMT=*) "Copyright (c) 2011-2013 &
            &Massachusetts Institute of Technology"
       write(UNIT=OUTPUT_UNIT, FMT=*) "MIT/X license at &
-           &<http://mit-crpg.github.com/openmc/license.html>"
+           &<http://mit-crpg.github.io/openmc/license.html>"
     end if
 
   end subroutine print_version
@@ -537,12 +539,6 @@ contains
       string = "Y Cone"
     case (SURF_CONE_Z)
       string = "Z Cone"
-    case (SURF_BOX_X)
-    case (SURF_BOX_Y)
-    case (SURF_BOX_Z)
-    case (SURF_BOX)
-    case (SURF_GQ)
-      string = "General Quadratic"
     end select
     write(unit_,*) '    Type = ' // trim(string)
 
@@ -630,8 +626,12 @@ contains
     end do
 
     ! Write information on S(a,b) table
-    if (mat % has_sab_table) then
-      write(unit_,*) '    S(a,b) table = ' // trim(mat % sab_name)
+    if (mat % n_sab > 0) then
+        write(unit_,*) '    S(a,b) tables:'
+      do i = 1, mat % n_sab
+        write(unit_,*) '      ' // trim(&
+             sab_tables(mat % i_sab_tables(i)) % name)
+      end do
     end if
     write(unit_,*)
 
@@ -1085,7 +1085,7 @@ contains
 
     call header("OpenMC Monte Carlo Code", unit=UNIT_SUMMARY, level=1)
     write(UNIT=UNIT_SUMMARY, FMT=*) &
-         "Copyright:     2011-2012 Massachusetts Institute of Technology"
+         "Copyright:     2011-2013 Massachusetts Institute of Technology"
     write(UNIT=UNIT_SUMMARY, FMT='(1X,A,7X,2(I1,"."),I1)') &
          "Version:", VERSION_MAJOR, VERSION_MINOR, VERSION_RELEASE
 #ifdef GIT_SHA1
@@ -1309,7 +1309,7 @@ contains
   subroutine print_plot()
 
     integer :: i ! loop index for plots
-    type(Plot), pointer :: pl => null()
+    type(PlotSlice), pointer :: pl => null()
 
     ! Display header for plotting
     call header("PLOTTING SUMMARY")
@@ -1361,8 +1361,6 @@ contains
 
     integer(8)    :: total_particles ! total # of particles simulated
     real(8)       :: speed           ! # of neutrons/second
-    real(8)       :: alpha           ! significance level for CI
-    real(8)       :: t_value         ! t-value for confidence intervals
     character(15) :: string
 
     ! display header block
@@ -1396,7 +1394,23 @@ contains
     speed = real(total_particles) / (time_inactive % elapsed + &
          time_active % elapsed)
     string = to_str(speed)
-    write(ou,101) "Calculation Rate", trim(string)
+    write(ou,101) trim(string)
+
+    ! format for write statements
+100 format (1X,A,T36,"= ",ES11.4," seconds")
+101 format (1X,"Calculation Rate",T36,"=  ",A," neutrons/second")
+
+  end subroutine print_runtime
+
+!===============================================================================
+! PRINT_RESULTS displays various estimates of k-effective as well as the global
+! leakage rate.
+!===============================================================================
+
+  subroutine print_results()
+
+    real(8) :: alpha   ! significance level for CI
+    real(8) :: t_value ! t-value for confidence intervals
 
     ! display header block for results
     call header("Results")
@@ -1408,23 +1422,26 @@ contains
 
       ! Adjust sum_sq
       global_tallies(:) % sum_sq = t_value * global_tallies(:) % sum_sq
+
+      ! Adjust combined estimator
+      k_combined(2) = t_value * k_combined(2)
     end if
 
     ! write global tallies
-    write(ou,102) "k-effective (Collision)", global_tallies(K_COLLISION) % sum, &
-         global_tallies(K_COLLISION) % sum_sq
-    write(ou,102) "k-effective (Track-length)", global_tallies(K_TRACKLENGTH) % sum, &
-         global_tallies(K_TRACKLENGTH) % sum_sq
+    write(ou,102) "k-effective (Collision)", global_tallies(K_COLLISION) &
+         % sum, global_tallies(K_COLLISION) % sum_sq
+    write(ou,102) "k-effective (Track-length)", global_tallies(K_TRACKLENGTH) &
+         % sum, global_tallies(K_TRACKLENGTH) % sum_sq
+    write(ou,102) "k-effective (Absorption)", global_tallies(K_ABSORPTION) &
+         % sum, global_tallies(K_ABSORPTION) % sum_sq
+    write(ou,102) "Combined k-effective", k_combined
     write(ou,102) "Leakage Fraction", global_tallies(LEAKAGE) % sum, &
          global_tallies(LEAKAGE) % sum_sq
     write(ou,*)
 
-    ! format for write statements
-100 format (1X,A,T36,"= ",ES11.4," seconds")
-101 format (1X,A,T36,"=  ",A," neutrons/second")
 102 format (1X,A,T30,"= ",F8.5," +/- ",F8.5)
 
-  end subroutine print_runtime
+  end subroutine print_results
 
 !===============================================================================
 ! WRITE_TALLIES creates an output file and writes out the mean values of all

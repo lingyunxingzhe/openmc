@@ -10,7 +10,7 @@ module global
   use material_header,  only: Material
   use mesh_header,      only: StructuredMesh
   use particle_header,  only: Particle
-  use plot_header,      only: Plot
+  use plot_header,      only: PlotSlice
   use set_header,       only: SetInt
   use source_header,    only: ExtSource
   use tally_header,     only: TallyObject, TallyMap, TallyResult
@@ -36,12 +36,12 @@ module global
   ! GEOMETRY-RELATED VARIABLES
 
   ! Main arrays
-  type(Cell),     allocatable, target :: cells(:)
-  type(Universe), allocatable, target :: universes(:)
-  type(Lattice),  allocatable, target :: lattices(:)
-  type(Surface),  allocatable, target :: surfaces(:)
-  type(Material), allocatable, target :: materials(:)
-  type(Plot),     allocatable, target :: plots(:)
+  type(Cell),      allocatable, target :: cells(:)
+  type(Universe),  allocatable, target :: universes(:)
+  type(Lattice),   allocatable, target :: lattices(:)
+  type(Surface),   allocatable, target :: surfaces(:)
+  type(Material),  allocatable, target :: materials(:)
+  type(PlotSlice), allocatable, target :: plots(:)
 
   ! Size of main arrays
   integer :: n_cells     ! # of cells
@@ -61,6 +61,7 @@ module global
   type(DictIntInt) :: material_dict
   type(DictIntInt) :: mesh_dict
   type(DictIntInt) :: tally_dict
+  type(DictIntInt) :: plot_dict
 
   ! ============================================================================
   ! CROSS SECTION RELATED VARIABLES
@@ -168,8 +169,12 @@ module global
 
   ! Temporary k-effective values
   real(8), allocatable :: k_batch(:) ! batch estimates of k
-  real(8) :: keff = ONE ! average k over active batches
-  real(8) :: keff_std   ! standard deviation of average k
+  real(8) :: keff = ONE       ! average k over active batches
+  real(8) :: keff_std         ! standard deviation of average k
+  real(8) :: k_col_abs = ZERO ! sum over batches of k_collision * k_absorption
+  real(8) :: k_col_tra = ZERO ! sum over batches of k_collision * k_tracklength
+  real(8) :: k_abs_tra = ZERO ! sum over batches of k_absorption * k_tracklength
+  real(8) :: k_combined(2)    ! combined best estimate of k-effective
 
   ! Shannon entropy
   logical :: entropy_on = .false.
@@ -184,6 +189,7 @@ module global
 
   ! Write source at end of simulation
   logical :: source_separate = .false.
+  logical :: source_write = .true.
 
   ! ============================================================================
   ! PARALLEL PROCESSING VARIABLES
@@ -355,7 +361,7 @@ module global
 
   ! Information about state points to be written
   integer :: n_state_points = 0
-  integer, allocatable :: statepoint_batch(:)
+  type(SetInt) :: statepoint_batch
 
   ! Various output options
   logical :: output_summary = .false.
@@ -371,11 +377,14 @@ module global
 contains
 
 !===============================================================================
-! FREE_MEMORY deallocates all global allocatable arrays in the program
+! FREE_MEMORY deallocates and clears  all global allocatable arrays in the 
+! program
 !===============================================================================
 
   subroutine free_memory()
-
+    
+    integer :: i ! Loop Index
+    
     ! Deallocate cells, surfaces, materials
     if (allocated(cells)) deallocate(cells)
     if (allocated(universes)) deallocate(universes)
@@ -385,14 +394,27 @@ contains
     if (allocated(plots)) deallocate(plots)
 
     ! Deallocate cross section data, listings, and cache
-    if (allocated(nuclides)) deallocate(nuclides)
+    if (allocated(nuclides)) then
+    ! First call the clear routines
+      do i = 1, size(nuclides)
+        call nuclides(i) % clear()
+      end do
+      deallocate(nuclides)
+    end if
     if (allocated(sab_tables)) deallocate(sab_tables)
     if (allocated(xs_listings)) deallocate(xs_listings)
     if (allocated(micro_xs)) deallocate(micro_xs)
 
     ! Deallocate tally-related arrays
     if (allocated(meshes)) deallocate(meshes)
-    if (allocated(tallies)) deallocate(tallies)
+    if (allocated(tallies)) then
+    ! First call the clear routines
+      do i = 1, size(tallies)
+        call tallies(i) % clear()
+      end do
+      ! Now deallocate the tally array
+      deallocate(tallies)
+    end if
     if (allocated(tally_maps)) deallocate(tally_maps)
 
     ! Deallocate energy grid
@@ -411,7 +433,20 @@ contains
     call active_tracklength_tallies % clear()
     call active_current_tallies % clear()
     call active_tallies % clear()
-
+    
+    ! Deallocate dictionaries
+    call cell_dict % clear()
+    call universe_dict % clear()
+    call lattice_dict % clear()
+    call surface_dict % clear()
+    call material_dict % clear()
+    call mesh_dict % clear()
+    call tally_dict % clear()
+    call plot_dict % clear()
+    call nuclide_dict % clear()
+    call sab_dict % clear()
+    call xs_listing_dict % clear()
+    
   end subroutine free_memory
 
 end module global
