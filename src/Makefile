@@ -17,19 +17,19 @@ include OBJECTS
 #===============================================================================
 
 COMPILER = intel
-DEBUG    = no
+DEBUG    = yes
 PROFILE  = no
-OPTIMIZE = no
-MPI      = no
-HDF5     = no
-PETSC    = no
+OPTIMIZE = yes
+MPI      = yes
+HDF5     = yes
+PETSC    = yes
 
 #===============================================================================
 # External Library Paths
 #===============================================================================
 
 MPI_DIR   = /opt/mpich/3.0.2-$(COMPILER)
-HDF5_DIR  = /opt/hdf5/1.8.10-$(COMPILER)
+HDF5_DIR  = /opt/hdf5/1.8.9-$(COMPILER)
 PETSC_DIR = /opt/petsc/3.3-p6-$(COMPILER)
 
 #===============================================================================

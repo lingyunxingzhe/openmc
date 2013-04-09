@@ -11,6 +11,7 @@ module physics
   use geometry_header, only: Universe, BASE_UNIVERSE
   use global
   use interpolation,   only: interpolate_tab1
+  use loafs_banks,     only: loafs_transport_check
   use material_header, only: Material
   use mesh,            only: get_mesh_indices
   use output,          only: write_message
@@ -59,7 +60,9 @@ contains
       end if
 
       ! set birth cell attribute
-      p % cell_born = p % coord % cell
+      if (.not. loafs_run .or. loafs_site_gen) then
+        p % cell_born = p % coord % cell
+      end if
     end if
 
     ! Initialize number of events to zero
@@ -72,6 +75,12 @@ contains
     micro_xs % last_E = ZERO
 
     do while (p % alive)
+
+      ! add to loafs site banks or kill particle if appropriate
+      if (loafs_run) then
+        call loafs_transport_check()
+        if (.not. p % alive) exit
+      end if
 
       ! Calculate microscopic and macroscopic cross sections -- note: if the
       ! material is the same as the last material and the energy of the
@@ -107,7 +116,7 @@ contains
       global_tallies(K_TRACKLENGTH) % value = &
            global_tallies(K_TRACKLENGTH) % value + p % wgt * distance * &
            material_xs % nu_fission
-
+      
       if (d_collision > d_boundary) then
         ! ====================================================================
         ! PARTICLE CROSSES SURFACE
@@ -133,7 +142,7 @@ contains
         global_tallies(K_COLLISION) % value = &
              global_tallies(K_COLLISION) % value + p % wgt * &
              material_xs % nu_fission / material_xs % total
-
+        
         p % surface = NONE
         call collision()
 
@@ -160,6 +169,7 @@ contains
           ! Advance coordinate level
           coord => coord % next
         end do
+        
       end if
 
       ! If particle has too many events, display warning and kill it
@@ -170,7 +180,7 @@ contains
         call warning()
         p % alive = .false.
       end if
-
+      
     end do
 
   end subroutine transport
@@ -193,7 +203,8 @@ contains
     ! since the direction of the particle will change and we need to use the
     ! pre-collision direction to figure out what mesh surfaces were crossed
 
-    if (active_current_tallies % size() > 0) call score_surface_current()
+    if (active_current_tallies % size() > 0) &
+      call score_surface_current()
 
     ! Sample nuclide/reaction for the material the particle is in
     call sample_reaction()
@@ -217,7 +228,8 @@ contains
     ! occurred rather than before because we need information on the outgoing
     ! energy for any tallies with an outgoing energy filter
 
-    if (active_analog_tallies % size() > 0) call score_analog_tally()
+    if (active_analog_tallies % size() > 0) &
+      call score_analog_tally()
 
     ! Reset banked weight during collision
     p % n_bank   = 0
@@ -300,7 +312,7 @@ contains
       global_tallies(K_ABSORPTION) % value = &
            global_tallies(K_ABSORPTION) % value + p % absorb_wgt * &
            material_xs % nu_fission / material_xs % absorption
-
+      
     else
       ! set cutoff variable for analog cases
       cutoff = prn() * micro_xs(i_nuclide) % total
@@ -312,13 +324,14 @@ contains
 
       ! See if disappearance reaction happens
       if (prob > cutoff) then
+
         ! Score absorption estimate of keff. Note that this appears in three
         ! places -- absorption reactions, total fission reactions, and
         ! first/second/etc chance fission reactions
         global_tallies(K_ABSORPTION) % value = &
              global_tallies(K_ABSORPTION) % value + p % wgt * &
              material_xs % nu_fission / material_xs % absorption
-
+        
         p % alive = .false.
         p % event = EVENT_ABSORB
         p % event_MT = N_DISAPPEAR
@@ -334,7 +347,7 @@ contains
       ! since absorption is treated implicitly. However, we still need to bank
       ! sites so we sample a fission reaction (if there are multiple) and bank
       ! the expected number of fission neutrons created.
-
+      
       if (survival_biasing) then
         cutoff = prn() * micro_xs(i_nuclide) % fission
         prob = ZERO
@@ -355,13 +368,14 @@ contains
           ! With no survival biasing, the particle is absorbed and so its
           ! life is over
           if (.not. survival_biasing) then
+          
             ! Score absorption estimate of keff. Note that this appears in three
             ! places -- absorption reactions, total fission reactions, and
             ! first/second/etc chance fission reactions
             global_tallies(K_ABSORPTION) % value = &
                  global_tallies(K_ABSORPTION) % value + p % wgt * &
                  material_xs % nu_fission / material_xs % absorption
-
+            
             p % alive = .false.
             p % event = EVENT_FISSION
             p % event_MT = rxn % MT
@@ -403,7 +417,7 @@ contains
               global_tallies(K_ABSORPTION) % value = &
                    global_tallies(K_ABSORPTION) % value + p % wgt * &
                    material_xs % nu_fission / material_xs % absorption
-
+              
               ! With no survival biasing, the particle is absorbed and so
               ! its life is over
               p % alive = .false.
@@ -857,6 +871,8 @@ contains
     integer, intent(in)     :: i_nuclide
     type(Reaction), pointer :: rxn
 
+    integer :: k
+
     integer :: i            ! loop index
     integer :: j            ! index on nu energy grid / precursor group
     integer :: lc           ! index before start of energies/nu values
@@ -878,6 +894,7 @@ contains
     real(8) :: prob         ! cumulative probability
     real(8) :: weight       ! weight adjustment for ufs method
     logical :: in_mesh      ! source site in ufs mesh?
+    integer :: maxbank      ! maximum fission bank size
     type(Nuclide),    pointer :: nuc
     type(DistEnergy), pointer :: edist => null()
 
@@ -933,14 +950,16 @@ contains
     end if
 
     ! Bank source neutrons
-    if (nu == 0 .or. n_bank == 3*work) return
-    do i = int(n_bank,4) + 1, int(min(n_bank + nu, 3*work),4)
-      ! Bank source neutrons by copying particle data
-      fission_bank(i) % xyz = p % coord0 % xyz
-
-      ! Set weight of fission bank site
-      fission_bank(i) % wgt = ONE/weight
-
+    if (nu == 0) return
+    if (loafs_run) then
+      if (n_bank == loafs % fission_bank_size) return
+      maxbank = loafs % fission_bank_size
+    else
+      if (n_bank == 3*work) return
+      maxbank = 3*work
+    end if
+    do i = int(n_bank,4) + 1, int(min(n_bank + nu, maxbank),4)
+      
       ! Sample cosine of angle -- fission neutrons are always emitted
       ! isotropically. Sometimes in ACE data, fission reactions actually have
       ! an angular distribution listed, but for those that do, it's simply just
@@ -951,7 +970,7 @@ contains
       if (prn() < beta) then
         ! ====================================================================
         ! DELAYED NEUTRON SAMPLED
-
+        
         ! sampled delayed precursor group
         xi = prn()
         lc = 1
@@ -1031,6 +1050,12 @@ contains
 
       end if
 
+      ! Bank source neutrons by copying particle data
+      fission_bank(i) % xyz = p % coord0 % xyz
+
+      ! Set weight of fission bank site
+      fission_bank(i) % wgt = ONE/weight
+
       ! Sample azimuthal angle uniformly in [0,2*pi)
       phi = TWO*PI*prn()
       fission_bank(i) % uvw(1) = mu
@@ -1039,11 +1064,36 @@ contains
 
       ! set energy of fission neutron
       fission_bank(i) % E = E_out
+        
+
+      if (loafs_run) then
+        
+        loafs_bin = binary_search(loafs % egrid, loafs % n_egroups + 1, E_out)
+    
+        if (loafs % site_bank_idx(loafs_bin) < loafs % max_sites(loafs_bin)) then
+          loafs % site_bank_idx(loafs_bin) = loafs % site_bank_idx(loafs_bin) + 1
+          
+          k = loafs % site_bank_idx(loafs_bin)
+          
+          loafs % site_banks(loafs_bin) % sites(k) % wgt = fission_bank(i) % wgt
+          loafs % site_banks(loafs_bin) % sites(k) % xyz = fission_bank(i) % xyz
+          loafs % site_banks(loafs_bin) % sites(k) % uvw = fission_bank(i) % uvw
+          loafs % site_banks(loafs_bin) % sites(k) % E = fission_bank(i) % E
+          
+          loafs % group_in_weights(loafs_bin) = loafs % group_in_weights(loafs_bin) + fission_bank(i) % wgt
+        else
+          loafs % extra_weights(loafs_bin) = loafs % extra_weights(loafs_bin) + fission_bank(i) % wgt
+        end if
+        
+      end if
+      
     end do
 
     ! increment number of bank sites
-    n_bank = min(n_bank + nu, 3*work)
-
+!    if (.not. loafs_site_gen) then
+      n_bank = min(n_bank + nu, maxbank)
+!    end if
+    
     ! Store total weight banked for analog fission tallies
     p % n_bank   = nu
     p % wgt_bank = nu/weight

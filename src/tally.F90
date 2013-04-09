@@ -4,6 +4,7 @@ module tally
   use constants
   use error,            only: fatal_error
   use global
+  use loafs_banks,      only: loafsbin_from_matchingbins
   use math,             only: t_percentile, calc_pn
   use mesh,             only: get_mesh_bin, bin_to_mesh_indices, &
                               get_mesh_indices, mesh_indices_to_bin, &
@@ -1758,14 +1759,14 @@ contains
       n_realizations = n_realizations + n_procs
     end if
 
-    ! Accumulate on master only unless run is not reduced then do it on all
+    ! Accumulate on master only, unless run is not reduced: then do it on all
     if (master .or. (.not. reduce_tallies)) then
       ! Accumulate results for each tally
       do i = 1, active_tallies % size()
         call accumulate_tally(tallies(active_tallies % get_item(i)))
       end do
 
-      if (run_mode == MODE_EIGENVALUE) then
+      if (run_mode == MODE_EIGENVALUE .or. run_mode == MODE_LOAFS) then
         ! Get the current batch estimate of k_analog for displaying to output
         ! --- this has to be performed after reduce_tally_values and before
         ! accumulate_result
@@ -1875,7 +1876,7 @@ contains
   subroutine accumulate_tally(t)
 
     type(TallyObject), intent(inout) :: t
-
+    
     ! Increment number of realizations
     if (reduce_tallies) then
       t % n_realizations = t % n_realizations + 1
@@ -1884,9 +1885,50 @@ contains
     end if
 
     ! Accumulate each TallyResult
-    call accumulate_result(t % results)
+    if (run_mode == MODE_LOAFS) then
+      call accumulate_result_loafs(t)
+    else
+      call accumulate_result(t % results)
+    end if
 
   end subroutine accumulate_tally
+
+!===============================================================================
+! ACCUMULATE_RESULT_LOAFS
+!===============================================================================
+
+  subroutine accumulate_result_loafs(t)
+
+    type(TallyObject), intent(inout) :: t
+
+    integer :: score_bin, filter_bin, loafs_bin
+!    write(*,*) "tally:",t % id
+!    write(*,*) "filter bins:",t % filters % n_bins
+!    write(*,*) "stride:",t % stride
+!    write(*,*) "resultsize:",t % total_filter_bins
+!    write(*,*) "results:",t % results(1,:)
+    do score_bin = 1, t % n_score_bins
+!      write(*,*)"score:",score_bin
+      do filter_bin = 1, t % total_filter_bins
+        call matchingbins_from_filterbin(t,filter_bin)
+        loafs_bin = loafsbin_from_matchingbins(t)
+      
+        t % results % value = t % results % value / &
+                                                loafs % total_weights(loafs_bin)
+                                                
+        t % results % sum    = t % results % sum    + t % results % value
+        t % results % sum_sq = t % results % sum_sq + &
+                                       t % results % value * t % results % value
+
+        t % results % value = ZERO
+        
+      end do
+!      write(*,*)
+    end do
+!    write(*,*)
+
+
+  end subroutine accumulate_result_loafs
 
 !===============================================================================
 ! TALLY_STATISTICS computes the mean and standard deviation of the mean of each
@@ -1902,7 +1944,6 @@ contains
     ! Calculate statistics for user-defined tallies
     do i = 1, n_tallies
       t => tallies(i)
-
       call statistics_result(t % results, t % n_realizations)
     end do
 
@@ -2037,5 +2078,27 @@ contains
     end do
 
   end subroutine setup_active_cmfdtallies
+
+!===============================================================================
+! MATCHINGBINS_FROM_FILTERBIN
+!===============================================================================
+
+  subroutine matchingbins_from_filterbin(t,fb)
+
+    type(TallyObject), intent(inout) :: t
+    integer,           intent(in)    :: fb ! filter bin
+    
+    integer                          :: i
+
+    t % matching_bins(1) = (fb-1) / t % stride(1) + 1
+    do i = 2, t % n_filters
+!      t % matching_bins(i) = ceiling( dble(fb) / dble(t % stride(i)))
+      t % matching_bins(i) = (fb-1) / t % stride(i)
+      t % matching_bins(i) = modulo(t % matching_bins(i), &
+                                    t % stride(i-1)/t % stride(i)) + 1
+    end do
+    
+
+  end subroutine matchingbins_from_filterbin
 
 end module tally

@@ -6,6 +6,7 @@ module input_xml
   use error,            only: fatal_error, warning
   use geometry_header,  only: Cell, Surface, Lattice
   use global
+  use loafs_input,      only: configure_loafs
   use list_header,      only: ListChar, ListReal
   use mesh_header,      only: StructuredMesh
   use output,           only: write_message
@@ -37,6 +38,7 @@ contains
     call read_materials_xml()
     call read_tallies_xml()
     if (cmfd_run) call configure_cmfd()
+    if (loafs_run) call configure_loafs()
 
   end subroutine read_input_xml
 
@@ -105,6 +107,7 @@ contains
     call lower_case(run_loafs_)
     if (run_loafs_ == 'true' .or. run_loafs_ == '1') then
       loafs_run = .true.
+      run_mode = MODE_LOAFS
     end if
 
     ! Make sure that either criticality or fixed source was specified

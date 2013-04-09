@@ -163,6 +163,7 @@ global.o: cmfd_header.o
 global.o: constants.o
 global.o: dict_header.o
 global.o: geometry_header.o
+global.o: loafs_header.o
 global.o: material_header.o
 global.o: mesh_header.o
 global.o: particle_header.o
@@ -195,6 +196,7 @@ initialize.o: geometry_header.o
 initialize.o: global.o
 initialize.o: hdf5_interface.o
 initialize.o: input_xml.o
+initialize.o: loafs_banks.o
 initialize.o: output.o
 initialize.o: random_lcg.o
 initialize.o: source.o
@@ -209,6 +211,7 @@ input_xml.o: dict_header.o
 input_xml.o: error.o
 input_xml.o: geometry_header.o
 input_xml.o: global.o
+input_xml.o: loafs_input.o
 input_xml.o: list_header.o
 input_xml.o: mesh_header.o
 input_xml.o: output.o
@@ -231,8 +234,34 @@ interpolation.o: global.o
 interpolation.o: search.o
 interpolation.o: string.o
 
+loafs_main.o: bank_header.o
+loafs_main.o: cmfd_execute.o
 loafs_main.o: global.o
+loafs_main.o: loafs_banks.o
+loafs_main.o: math.o
 loafs_main.o: output.o
+loafs_main.o: physics.o
+loafs_main.o: random_lcg.o
+loafs_main.o: search.o
+loafs_main.o: sort.o
+loafs_main.o: source.o
+loafs_main.o: string.o
+loafs_main.o: tally.o
+
+loafs_banks.o: constants.o
+loafs_banks.o: global.o
+loafs_banks.o: error.o
+loafs_banks.o: particle_header.o
+loafs_banks.o: random_lcg.o
+loafs_banks.o: search.o
+loafs_banks.o: string.o
+loafs_banks.o: tally_header.o
+
+loafs_input.o: templates/loafs_t.o
+loafs_input.o: error.o
+loafs_input.o: global.o
+loafs_input.o: output.o
+loafs_input.o: string.o
 
 list_header.o: constants.o
 
@@ -278,6 +307,7 @@ physics.o: geometry.o
 physics.o: geometry_header.o
 physics.o: global.o
 physics.o: interpolation.o
+physics.o: loafs_banks.o
 physics.o: material_header.o
 physics.o: mesh.o
 physics.o: output.o
@@ -308,6 +338,10 @@ search.o: global.o
 
 set_header.o: list_header.o
 
+sort.o: error.o
+sort.o: global.o
+sort.o: loafs_header.o
+
 source.o: bank_header.o
 source.o: constants.o
 source.o: error.o
@@ -336,6 +370,7 @@ tally.o: ace_header.o
 tally.o: constants.o
 tally.o: error.o
 tally.o: global.o
+tally.o: loafs_banks.o
 tally.o: math.o
 tally.o: mesh.o
 tally.o: mesh_header.o

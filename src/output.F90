@@ -1415,29 +1415,35 @@ contains
     ! display header block for results
     call header("Results")
 
-    if (confidence_intervals) then
-      ! Calculate t-value for confidence intervals
-      alpha = ONE - CONFIDENCE_LEVEL
-      t_value = t_percentile(ONE - alpha/TWO, n_realizations - 1)
+    if (run_mode == MODE_LOAFS) then
+    
+    else
 
-      ! Adjust sum_sq
-      global_tallies(:) % sum_sq = t_value * global_tallies(:) % sum_sq
+      if (confidence_intervals) then
+        ! Calculate t-value for confidence intervals
+        alpha = ONE - CONFIDENCE_LEVEL
+        t_value = t_percentile(ONE - alpha/TWO, n_realizations - 1)
 
-      ! Adjust combined estimator
-      k_combined(2) = t_value * k_combined(2)
+        ! Adjust sum_sq
+        global_tallies(:) % sum_sq = t_value * global_tallies(:) % sum_sq
+
+        ! Adjust combined estimator
+        k_combined(2) = t_value * k_combined(2)
+      end if
+
+      ! write global tallies
+      write(ou,102) "k-effective (Collision)", global_tallies(K_COLLISION) &
+           % sum, global_tallies(K_COLLISION) % sum_sq
+      write(ou,102) "k-effective (Track-length)", global_tallies(K_TRACKLENGTH) &
+           % sum, global_tallies(K_TRACKLENGTH) % sum_sq
+      write(ou,102) "k-effective (Absorption)", global_tallies(K_ABSORPTION) &
+           % sum, global_tallies(K_ABSORPTION) % sum_sq
+      write(ou,102) "Combined k-effective", k_combined
+      write(ou,102) "Leakage Fraction", global_tallies(LEAKAGE) % sum, &
+           global_tallies(LEAKAGE) % sum_sq
+      write(ou,*)
+
     end if
-
-    ! write global tallies
-    write(ou,102) "k-effective (Collision)", global_tallies(K_COLLISION) &
-         % sum, global_tallies(K_COLLISION) % sum_sq
-    write(ou,102) "k-effective (Track-length)", global_tallies(K_TRACKLENGTH) &
-         % sum, global_tallies(K_TRACKLENGTH) % sum_sq
-    write(ou,102) "k-effective (Absorption)", global_tallies(K_ABSORPTION) &
-         % sum, global_tallies(K_ABSORPTION) % sum_sq
-    write(ou,102) "Combined k-effective", k_combined
-    write(ou,102) "Leakage Fraction", global_tallies(LEAKAGE) % sum, &
-         global_tallies(LEAKAGE) % sum_sq
-    write(ou,*)
 
 102 format (1X,A,T30,"= ",F8.5," +/- ",F8.5)
 

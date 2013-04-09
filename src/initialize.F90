@@ -11,6 +11,7 @@ module initialize
   use global
   use input_xml,        only: read_input_xml, read_cross_sections_xml,         &
                               cells_in_univ_dict, read_plots_xml
+  use loafs_banks,      only: allocate_loafs_banks
   use output,           only: title, header, write_summary, print_version,     &
                               print_usage, write_xs_summary, print_plot
   use random_lcg,       only: initialize_prng
@@ -117,6 +118,11 @@ contains
       if (run_mode == MODE_EIGENVALUE) then
         call allocate_banks()
         if (.not. restart_run) call initialize_source()
+      end if
+
+      if (run_mode == MODE_LOAFS) then
+        call allocate_loafs_banks()
+        call initialize_source()
       end if
 
       ! If this is a restart run, load the state point data and binary source

@@ -7,6 +7,7 @@ module global
   use constants
   use dict_header,      only: DictCharInt, DictIntInt
   use geometry_header,  only: Cell, Universe, Lattice, Surface
+  use loafs_header
   use material_header,  only: Material
   use mesh_header,      only: StructuredMesh
   use particle_header,  only: Particle
@@ -104,10 +105,12 @@ module global
   ! Pointers for different tallies
   type(TallyObject), pointer :: user_tallies(:) => null()
   type(TallyObject), pointer :: cmfd_tallies(:) => null()
+  type(TallyObject), pointer :: loafs_tallies(:) => null()
 
   ! Starting index (minus 1) in tallies for each tally group
   integer :: i_user_tallies = -1
   integer :: i_cmfd_tallies = -1
+  integer :: i_loafs_tallies = -1
 
   ! Active tally lists
   type(SetInt) :: active_analog_tallies
@@ -373,6 +376,21 @@ module global
 
   ! Is LOAFS active
   logical :: loafs_run = .false.
+  
+  ! Main object
+  type(loafs_type) :: loafs
+  
+  integer :: n_loafs_tallies             = 3
+  
+  integer :: loafs_bin        ! index in the loafs bin grid current particle
+  integer :: loafs_last_bin   ! previous loafs bin index
+  integer :: loafs_active_bin ! index of currently running loafs bin
+  
+  logical :: loafs_site_gen = .false.
+  
+  integer :: debug(4)
+  real(8) :: debug_wgt(4)
+  integer :: debug2
 
 contains
 
